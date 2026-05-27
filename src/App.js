@@ -1,74 +1,49 @@
-import { useEffect } from "react";
-import UOAScanner from "./UOAScanner";
-import { LoginScreen, useAuth, maskKey } from "./auth";
-import { dataService } from "./dataService";
-import { DATA_CONFIG } from "./config";
+// src/App.js — Insider Scanner root
+// Auth state: sessionStorage persisted (matches UOA Scanner pattern)
+// Owner role unlocks Admin button in header
 
-window._dataService = dataService;
-window._latestQuotes = {};
+import { useState, useEffect } from 'react';
+import LoginScreen from './LoginScreen';
+import InsiderScanner from './InsiderScanner';
+import AdminPanel from './AdminPanel';
 
 export default function App() {
-  const { role, login, logout, isOwner, userName } = useAuth();
+  const [user,       setUser]       = useState(null);
+  const [showAdmin,  setShowAdmin]  = useState(false);
+  const [booting,    setBooting]    = useState(true);
 
-  useEffect(() => { if (userName) window._userName = userName; }, [userName]);
-
-  // ── Auto-login from shareable link ──────────────────────────────────────────
-  // If the URL contains ?u=username&p=password, attempt login automatically.
-  // After login (success or fail), strip the params from the URL so credentials
-  // are not left visible in the address bar or browser history.
+  // Restore session from sessionStorage on mount
   useEffect(() => {
-    if (role) return; // already logged in
-    const params = new URLSearchParams(window.location.search);
-    const u = params.get("u");
-    const p = params.get("p");
-    if (!u || !p) return;
-
-    // Clean URL immediately so credentials don't sit in the address bar
-    const cleanUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
-
-    fetch("/api/users?action=login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: u, password: p }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          login(data.role, data.name);
-        }
-        // If login fails, user just sees the normal login screen — no error shown
-        // since credentials in URL may have been tampered with
-      })
-      .catch(() => {
-        // Network error — silently fall through to login screen
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    try {
+      const saved = sessionStorage.getItem('insider_user');
+      if (saved) setUser(JSON.parse(saved));
+    } catch { /* ignore */ }
+    setBooting(false);
   }, []);
 
-  // ── DataService init ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    dataService.init(DATA_CONFIG).then(() => {
-      window._dataService = dataService;
-      dataService.onQuote(quote => {
-        if (quote?.symbol && quote?.price) {
-          window._latestQuotes[quote.symbol] = quote.price.toFixed(2);
-          if (window._setTrades)
-            window._setTrades(prev =>
-              prev.map(t =>
-                t.symbol === quote.symbol
-                  ? { ...t, currentPrice: quote.price.toFixed(2) }
-                  : t
-              )
-            );
-        }
-      });
-      dataService.onError(err => console.warn("[DataService]", err.message || err));
-    }).catch(err => console.warn("[DataService] init failed:", err.message));
+  function handleLogin(userData) {
+    setUser(userData);
+  }
 
-    return () => dataService.disconnect();
-  }, []);
+  function handleLogout() {
+    sessionStorage.removeItem('insider_user');
+    setUser(null);
+    setShowAdmin(false);
+  }
 
-  if (!role) return <LoginScreen onLogin={login} />;
-  return <UOAScanner role={role} onLogout={logout} isOwner={isOwner} maskKey={maskKey} />;
+  if (booting) return null;
+  if (!user)   return <LoginScreen onLogin={handleLogin} />;
+
+  return (
+    <>
+      <InsiderScanner
+        user={user}
+        onLogout={handleLogout}
+        onAdmin={() => setShowAdmin(true)}
+      />
+      {showAdmin && (
+        <AdminPanel onClose={() => setShowAdmin(false)} />
+      )}
+    </>
+  );
 }

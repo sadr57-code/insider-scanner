@@ -323,6 +323,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
                 <SortTh col="vs52Low">vs 52W Low</SortTh>
                 <SortTh col="cluster">Cluster</SortTh>
                 <SortTh col="signal">Signal</SortTh>
+                <SortTh col="signalScore">Score</SortTh>
                 <SortTh col="date">Date</SortTh>
                 <th style={{ background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb', padding:'8px 10px', width:28 }} />
               </tr>
@@ -364,6 +365,12 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
                       </span>
                     </td>
                     <td style={{ padding:'9px 10px' }}><SignalBadge signal={t.signal} /></td>
+                    <td style={{ padding:'9px 10px', textAlign:'center' }}>
+                      <span style={{
+                        fontSize:12, fontWeight:600,
+                        color: t.signalScore >= 60 ? '#065f46' : t.signalScore >= 35 ? '#92400e' : '#6b7280'
+                      }}>{t.signalScore ?? '—'}</span>
+                    </td>
                     <td style={{ padding:'9px 10px', color:'#9ca3af', whiteSpace:'nowrap' }}>{t.date}</td>
                     <td style={{ padding:'9px 10px', color:'#9ca3af', textAlign:'center' }}>
                       <span style={{ transition:'transform .2s', display:'inline-block', transform: isOpen ? 'rotate(180deg)' : '' }}>▾</span>
@@ -372,7 +379,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
 
                   isOpen && (
                     <tr key={`${rowKey}-detail`} style={{ background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb' }}>
-                      <td colSpan={13} style={{ padding:'12px 16px' }}>
+                      <td colSpan={14} style={{ padding:'12px 16px' }}>
                         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:8 }}>
                           {[
                             ['Free Cash Flow', t.freeFlow || '—'],

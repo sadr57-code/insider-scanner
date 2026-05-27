@@ -27,7 +27,7 @@ async function redisSet(key, value, ttl = CACHE_TTL) {
 async function fetchEdgarRSS() {
   // Use the EDGAR full-text search which correctly filters by form type
   const url = 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=4&dateb=&owner=include&count=40&search_text=&output=atom';
-  const r = await fetch(url, { headers: { 'User-Agent': UA } });
+  const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error(`EDGAR RSS ${r.status}`);
   const xml = await r.text();
 
@@ -69,7 +69,7 @@ async function parseForm4(cik, accNo, date) {
       : `${cleanAcc.slice(0,10)}-${cleanAcc.slice(10,12)}-${cleanAcc.slice(12)}`;
 
     const idxUrl = `https://www.sec.gov/Archives/edgar/data/${cleanCik}/${cleanAcc}/${fmtAcc}-index.json`;
-    const idxRes = await fetch(idxUrl, { headers: { 'User-Agent': UA } });
+    const idxRes = await fetch(idxUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) });
     if (!idxRes.ok) return null;
     const idx = await idxRes.json();
 
@@ -82,7 +82,7 @@ async function parseForm4(cik, accNo, date) {
     if (!xmlFile) return null;
 
     const xmlUrl = `https://www.sec.gov/Archives/edgar/data/${cleanCik}/${cleanAcc}/${xmlFile.name}`;
-    const xmlRes = await fetch(xmlUrl, { headers: { 'User-Agent': UA } });
+    const xmlRes = await fetch(xmlUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) });
     if (!xmlRes.ok) return null;
     const xml = await xmlRes.text();
 
@@ -227,7 +227,7 @@ export default async function handler(req, res) {
     if (!trades) {
       const entries = await fetchEdgarRSS();
       const cutoff  = new Date(Date.now() - parseInt(days)*86400000);
-      const recent  = entries.filter(e => !e.date || new Date(e.date) >= cutoff).slice(0,35);
+      const recent  = entries.filter(e => !e.date || new Date(e.date) >= cutoff).slice(0,15);
 
       const parsed = await Promise.allSettled(recent.map(e => parseForm4(e.cik, e.accNo, e.date)));
       const raw    = parsed.filter(r=>r.status==='fulfilled'&&r.value).map(r=>r.value);

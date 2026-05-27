@@ -5,7 +5,13 @@
     { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
   "functions": {
-    "api/*.js": {
+    "api/insiders.js": {
+      "maxDuration": 30
+    },
+    "api/users.js": {
+      "maxDuration": 10
+    },
+    "api/debug.js": {
       "maxDuration": 15
     }
   }

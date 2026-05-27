@@ -39,21 +39,21 @@ async function fetchEdgarRSS() {
     const formType = entry.match(/term="([^"]+)"/)?.[1] || '';
     if (formType !== '4') continue;
 
-    // CIK is in the title: "4 - Company Name (0001649749) (Issuer)"
+    // CIK from title: "4 - Company (0001649749) (Issuer)"
     const cikMatch = entry.match(/\((\d{7,10})\)/);
     if (!cikMatch) continue;
-    const cik = cikMatch[1];
+    const cik = cikMatch[1].replace(/^0+/, '');
 
-    // Accession number is in summary AccNo field or link href
-    const accMatch = entry.match(/AccNo:\s*([0-9-]+)/) ||
-                     entry.match(/\/([0-9]{10}-[0-9]{2}-[0-9]{6})-index\.htm/);
-    if (!accMatch) continue;
-    const fmtAcc = accMatch[1];
+    // Accession number from link href index.htm URL
+    // href contains the clean folder: /data/{CIK}/{FOLDER}/{ACC}-index.htm
+    const hrefMatch = entry.match(/\/Archives\/edgar\/data\/\d+\/([0-9]+)\/([0-9-]+)-index\.htm/);
+    if (!hrefMatch) continue;
+    const accNo = hrefMatch[2]; // already formatted with dashes e.g. 0001189136-26-000004
 
     const dateMatch = entry.match(/<updated>([^T<]+)/);
     const date = dateMatch?.[1]?.trim() || '';
 
-    results.push({ cik, accNo: fmtAcc, date });
+    results.push({ cik, accNo, date });
   }
   return results;
 }
@@ -62,9 +62,13 @@ async function fetchEdgarRSS() {
 async function parseForm4(cik, accNo, date) {
   try {
     const cleanCik = String(cik).replace(/^0+/, '');
+    // Folder = no dashes, filename = with dashes
     const cleanAcc = accNo.replace(/-/g, '');
+    // Ensure accNo has dashes for the filename
+    const fmtAcc = accNo.includes('-') ? accNo
+      : `${cleanAcc.slice(0,10)}-${cleanAcc.slice(10,12)}-${cleanAcc.slice(12)}`;
 
-    const idxUrl = `https://www.sec.gov/Archives/edgar/data/${cleanCik}/${cleanAcc}/${accNo}-index.json`;
+    const idxUrl = `https://www.sec.gov/Archives/edgar/data/${cleanCik}/${cleanAcc}/${fmtAcc}-index.json`;
     const idxRes = await fetch(idxUrl, { headers: { 'User-Agent': UA } });
     if (!idxRes.ok) return null;
     const idx = await idxRes.json();

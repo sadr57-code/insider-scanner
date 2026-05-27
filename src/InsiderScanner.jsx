@@ -150,7 +150,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
     } finally {
       setLoading(false);
     }
-  }, [days, industry, role, minAmount, signal, search]);
+  }, [days, industry, role, minAmount, signal, minScore, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchTrades(); }, [fetchTrades]); // eslint-disable-line react-hooks/exhaustive-deps
 

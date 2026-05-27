@@ -1,21 +1,55 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const results = {};
+  const UA = 'InsiderScanner/1.0 (contact@example.com)';
+
   try {
-    const url = `http://openinsider.com/screener?xp=1&vl=100&fd=5&cnt=10&action=1`;
-    results.url = url;
-    const r = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml' },
-    });
-    results.status = r.status;
-    results.headers = Object.fromEntries([...r.headers.entries()]);
-    const html = await r.text();
-    results.htmlLength = html.length;
-    results.hasTinytable = html.includes('tinytable');
-    results.hasTable = html.includes('<table');
-    results.hasTbody = html.includes('<tbody>');
-    results.first500 = html.slice(0, 500);
-    results.last500  = html.slice(-500);
+    // Test 1: RSS feed
+    const rssUrl = 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=4&dateb=&owner=include&count=10&search_text=&output=atom';
+    results.rssUrl = rssUrl;
+    const rr = await fetch(rssUrl, { headers: { 'User-Agent': UA } });
+    results.rssStatus = rr.status;
+    const xml = await rr.text();
+    results.xmlLength = xml.length;
+    results.hasEntry = xml.includes('<entry>');
+
+    // Parse first entry
+    const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)];
+    results.entryCount = entries.length;
+
+    if (entries[0]) {
+      const e = entries[0][1];
+      results.firstEntryRaw = e.slice(0, 800);
+
+      // Try to extract id
+      const idMatch = e.match(/<id>([^<]+)<\/id>/);
+      results.firstId = idMatch?.[1] || 'NOT FOUND';
+
+      // Try CIK
+      const cikMatch = (idMatch?.[1] || '').match(/CIK=(\d+)/i) ||
+                       (idMatch?.[1] || '').match(/data\/(\d+)\//);
+      results.firstCik = cikMatch?.[1] || 'NOT FOUND';
+
+      // Try accession
+      const accMatch = (idMatch?.[1] || '').match(/accession-number=([0-9-]+)/i);
+      results.firstAcc = accMatch?.[1] || 'NOT FOUND';
+    }
+
+    // Test 2: if we got a CIK+acc, try fetching index
+    if (results.firstCik !== 'NOT FOUND' && results.firstAcc !== 'NOT FOUND') {
+      const cik = results.firstCik.replace(/^0+/, '');
+      const acc = results.firstAcc;
+      const cleanAcc = acc.replace(/-/g, '');
+      const idxUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${cleanAcc}/${acc}-index.json`;
+      results.idxUrl = idxUrl;
+      const ir = await fetch(idxUrl, { headers: { 'User-Agent': UA } });
+      results.idxStatus = ir.status;
+      if (ir.ok) {
+        const idx = await ir.json();
+        results.idxFiles = (idx.directory?.item || []).map(f => f.name);
+      }
+    }
+
   } catch(e) {
     results.error = e.message;
   }

@@ -14,6 +14,13 @@ const SIZES      = [
   { label: '$5M+',      value: '5000000' },
 ];
 const SIGNALS    = ['All', 'Strong', 'Moderate', 'Weak'];
+const SCORES     = [
+  { label: 'Any Score', value: '0'  },
+  { label: 'Score 40+', value: '40' },
+  { label: 'Score 55+', value: '55' },
+  { label: 'Score 60+', value: '60' },
+  { label: 'Score 70+', value: '70' },
+];
 const PERIODS    = [7, 14, 30, 60, 90];
 
 const IND_COLORS = {
@@ -77,6 +84,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
   const [role,      setRole]     = useState('All');
   const [minAmount, setMinAmount]= useState('0');
   const [signal,    setSignal]   = useState('All');
+  const [minScore,  setMinScore] = useState('0');
   const [search,    setSearch]   = useState('');
   const [sortCol,   setSortCol]  = useState('signalScore');
   const [sortDir,   setSortDir]  = useState(-1);
@@ -96,6 +104,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
           if (f.role)      setRole(f.role);
           if (f.minAmount) setMinAmount(f.minAmount);
           if (f.signal)    setSignal(f.signal);
+          if (f.minScore)  setMinScore(f.minScore);
         }
       })
       .catch(() => {});
@@ -109,7 +118,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
       fetch(`/api/users?action=filters&uid=${user.uid}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ days, industry, role, minAmount, signal, ...overrides }),
+        body: JSON.stringify({ days, industry, role, minAmount, signal, minScore, ...overrides }),
         credentials: 'include',
       }).catch(() => {});
     }, 1500);
@@ -125,6 +134,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
         role:      (opts.role     ?? role)     === 'All' ? 'all' : (opts.role     ?? role),
         minAmount: opts.minAmount ?? minAmount,
         signal:    (opts.signal   ?? signal)   === 'All' ? 'all' : (opts.signal   ?? signal),
+        minScore:  opts.minScore ?? minScore,
         search:    opts.search    ?? search,
         refresh:   opts.refresh   ? 'true'     : 'false',
       });
@@ -265,6 +275,9 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
         <select style={selStyle} value={signal} onChange={e => setAndFetch(setSignal, 'signal', e.target.value)}>
           {SIGNALS.map(s => <option key={s}>{s}</option>)}
         </select>
+        <select style={selStyle} value={minScore} onChange={e => setAndFetch(setMinScore, 'minScore', e.target.value)}>
+          {SCORES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
 
         <input
           type="text" placeholder="Search ticker / name…" value={search}
@@ -278,8 +291,8 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
         <button style={{ ...btnStyle, marginLeft:'auto', color:'#6b7280', fontSize:11 }}
           onClick={() => {
             setDays(7); setIndustry('All'); setRole('All');
-            setMinAmount('0'); setSignal('All'); setSearch('');
-            fetchTrades({ days:7, industry:'all', role:'all', minAmount:'0', signal:'all', search:'' });
+            setMinAmount('0'); setSignal('All'); setMinScore('0'); setSearch('');
+            fetchTrades({ days:7, industry:'all', role:'all', minAmount:'0', signal:'all', minScore:'0', search:'' });
           }}>Clear filters</button>
       </div>
 

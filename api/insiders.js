@@ -26,8 +26,15 @@ async function redisSet(key, value, ttl = CACHE_TTL) {
 
 // ─── Fetch + parse OpenInsider ────────────────────────────────────────────────
 async function fetchOpenInsider(days) {
-  const fd  = Math.min(parseInt(days), 90);
-  const url = `http://openinsider.com/screener?xp=1&vl=100&fd=${fd}&cnt=100&action=1`;
+  const d   = parseInt(days);
+  // Map days to OpenInsider fd param values
+  // fd: 1=1d, 2=2d, 3=3d, 5=1w, 14=2w, 30=1m, 60=2m, 90=3m
+  const fdMap = { 7:5, 14:14, 30:30, 60:60, 90:90 };
+  const fd    = fdMap[d] || (d <= 7 ? 5 : d <= 14 ? 14 : d <= 30 ? 30 : d <= 60 ? 60 : 90);
+  // Use date range for more precise filtering
+  const fromDate = new Date(Date.now() - d * 86400000).toISOString().split('T')[0];
+  const toDate   = new Date().toISOString().split('T')[0];
+  const url = `http://openinsider.com/screener?xp=1&vl=100&fd=${fd}&fdr=${fromDate}+-+${toDate}&cnt=100&action=1`;
   const r   = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; InsiderScanner/1.0)', 'Accept': 'text/html' },
   });
@@ -245,8 +252,8 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { days='7', industry='all', role='all', minAmount='0', signal='all', search='', refresh='false' } = req.query;
-  const cacheKey = `insider:v6:${days}`;
+  const { days='7', industry='all', role='all', minAmount='0', signal='all', minScore='0', search='', refresh='false' } = req.query;
+  const cacheKey = `insider:v6:${days}`; // filters applied after cache
 
   try {
     let trades = refresh === 'true' ? null : await redisGet(cacheKey);
@@ -289,6 +296,8 @@ export default async function handler(req, res) {
     if (minAmt > 0)            out = out.filter(t => t.amount >= minAmt);
     if (signal === 'Strong')   out = out.filter(t => t.signal === 'Strong');
     if (signal === 'Moderate') out = out.filter(t => t.signal !== 'Weak');
+    const minSc = parseInt(minScore) || 0;
+    if (minSc > 0) out = out.filter(t => (t.signalScore || 0) >= minSc);
     if (search) {
       const q = search.toLowerCase();
       out = out.filter(t => t.ticker?.toLowerCase().includes(q) || t.company?.toLowerCase().includes(q) || t.insider?.toLowerCase().includes(q));

@@ -22,7 +22,7 @@ async function fetchOpenInsider(days) {
   // Use fd=0 (all dates) and filter by date client-side to avoid OpenInsider rejecting specific fd values
   const fdMap = { 7:7, 14:14, 30:30, 60:60, 90:90 };
   const fd = fdMap[parseInt(days)] || 7;
-  const cnt = fd <= 7 ? 100 : fd <= 14 ? 200 : fd <= 30 ? 300 : 400;
+  const cnt = fd <= 7 ? 100 : fd <= 14 ? 200 : fd <= 30 ? 300 : fd <= 60 ? 400 : 500;
   const url = `http://openinsider.com/screener?xp=1&vl=100&fd=${fd}&cnt=${cnt}&action=1`;
   const r = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },

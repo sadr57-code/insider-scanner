@@ -26,9 +26,13 @@ export default async function handler(req, res) {
       results.firstId = idMatch?.[1] || 'NOT FOUND';
 
       // Try CIK
-      const cikMatch = (idMatch?.[1] || '').match(/CIK=(\d+)/i) ||
-                       (idMatch?.[1] || '').match(/data\/(\d+)\//);
+      // CIK from title: "4 - Company (0001649749) (Issuer)"
+      const cikMatch = e.match(/\((\d{7,10})\)/);
       results.firstCik = cikMatch?.[1] || 'NOT FOUND';
+      
+      // Acc from summary AccNo field
+      const accSummary = e.match(/AccNo:\s*([0-9-]+)/);
+      results.firstAccFromSummary = accSummary?.[1] || 'NOT FOUND';
 
       // Try accession
       const accMatch = (idMatch?.[1] || '').match(/accession-number=([0-9-]+)/i);

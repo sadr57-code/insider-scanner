@@ -34,7 +34,7 @@ async function fetchOpenInsider(days) {
   // Use date range for more precise filtering
   const fromDate = new Date(Date.now() - d * 86400000).toISOString().split('T')[0];
   const toDate   = new Date().toISOString().split('T')[0];
-  const url = `http://openinsider.com/screener?xp=1&vl=100&fd=${fd}&fdr=${fromDate}+-+${toDate}&cnt=100&action=1`;
+  const url = `http://openinsider.com/screener?xp=1&vl=100&fd=${fd}&cnt=100&action=1`;
   const r   = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; InsiderScanner/1.0)', 'Accept': 'text/html' },
   });

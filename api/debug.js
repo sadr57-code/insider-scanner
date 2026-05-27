@@ -8,22 +8,26 @@ export default async function handler(req, res) {
     });
     const html = await r.text();
 
-    // Find all table class names
-    const tableClasses = [...html.matchAll(/<table[^>]*class="([^"]+)"/gi)].map(m => m[1]);
-    results.tableClasses = tableClasses;
-
-    // Find the tinytable specifically
-    const ttMatch = html.match(/<table[^>]*class="[^"]*tinytable[^"]*"[^>]*>([\s\S]{0,3000})/i);
-    results.tinytablePreview = ttMatch ? ttMatch[1].slice(0, 1500) : 'NOT FOUND';
-
-    // Count tr tags inside any table
-    const trCount = (html.match(/<tr/gi) || []).length;
-    results.trCount = trCount;
-
-    // Get first <tr> content after the table header
-    const firstDataRow = html.match(/<tr[^>]*>\s*<td[^>]*>([\s\S]{0,500})/i);
-    results.firstDataRow = firstDataRow ? firstDataRow[0].slice(0, 500) : 'NOT FOUND';
-
+    // Extract tbody
+    const tbodyMatch = html.match(/<table[^>]*class="[^"]*tinytable[^"]*"[^>]*>[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/i);
+    results.tbodyFound = !!tbodyMatch;
+    
+    if (tbodyMatch) {
+      const tbody = tbodyMatch[1];
+      const rows = [...tbody.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+      results.rowCount = rows.length;
+      
+      if (rows[0]) {
+        // Show raw first row
+        results.firstRowRaw = rows[0][1].slice(0, 1000);
+        
+        // Extract cells from first row
+        const cells = [...rows[0][1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
+          .map(c => c[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim());
+        results.firstRowCells = cells;
+        results.cellCount = cells.length;
+      }
+    }
   } catch(e) {
     results.error = e.message;
   }

@@ -43,37 +43,46 @@ async function fetchOpenInsider(days) {
 
   const trades = [];
   for (const row of rows) {
-    // Extract all td contents, strip HTML tags
-    const cells = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
-      .map(c => c[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&Delta;/g, '').trim());
+    const rowHtml = row[1];
 
-    if (cells.length < 13) continue;
+    // Extract raw td HTML blocks (not stripped yet)
+    const tdBlocks = [...rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(c => c[1]);
+    if (tdBlocks.length < 13) continue;
 
-    // Columns: 0=X, 1=FilingDate, 2=TradeDate, 3=Ticker, 4=Company,
-    //          5=InsiderName, 6=Title, 7=TradeType, 8=Price, 9=Qty,
-    //          10=Owned, 11=DeltaOwn, 12=Value
-    const ticker = cells[3]?.replace(/[^A-Z]/gi, '').toUpperCase();
+    // Strip helper
+    const strip = (s) => s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&Delta;/g, '').replace(/&\w+;/g, '').trim();
+
+    // Ticker: extract from href="/TICKER" pattern in cell 3
+    const tickerMatch = tdBlocks[3]?.match(/href="\/([A-Z]{1,6})"/i);
+    const ticker = tickerMatch ? tickerMatch[1].toUpperCase() : null;
     if (!ticker || ticker.length > 6) continue;
 
-    // Only open-market purchases
-    if (!cells[7]?.includes('P - Purchase')) continue;
+    const tradeType = strip(tdBlocks[7] || '');
+    if (!tradeType.includes('P - Purchase')) continue;
 
-    const price  = parseFloat((cells[8]  || '0').replace(/[$,]/g, '')) || 0;
-    const qty    = parseFloat((cells[9]  || '0').replace(/[+,]/g, '')) || 0;
-    const value  = parseFloat((cells[12] || '0').replace(/[$,+]/g, '')) || 0;
+    const price  = parseFloat(strip(tdBlocks[8]  || '').replace(/[$,]/g, '')) || 0;
+    const qty    = parseFloat(strip(tdBlocks[9]  || '').replace(/[+,]/g, '')) || 0;
+    const value  = parseFloat(strip(tdBlocks[12] || '').replace(/[$,+]/g, '')) || 0;
 
     if (price <= 0 || qty <= 0) continue;
 
+    // Filing date from cell 1, trade date from cell 2
+    const filDate   = strip(tdBlocks[1] || '').split(' ')[0]; // just date part
+    const tradeDate = strip(tdBlocks[2] || '');
+    const company   = strip(tdBlocks[4] || '') || 'Unknown';
+    const insider   = strip(tdBlocks[5] || '') || 'Unknown';
+    const title     = strip(tdBlocks[6] || '');
+
     trades.push({
       ticker,
-      company:         cells[4] || 'Unknown',
-      insider:         cells[5] || 'Unknown',
-      role:            normalizeRole(cells[6]),
+      company,
+      insider,
+      role:            normalizeRole(title),
       shares:          qty,
       price,
       amount:          value > 0 ? value : qty * price,
-      date:            cells[2] || cells[1] || '',
-      filDate:         cells[1] || '',
+      date:            tradeDate || filDate,
+      filDate,
       is10b51:         false,
       directOwnership: true,
     });
@@ -111,11 +120,11 @@ function scoreSignal(trade, cluster, pd) {
   const reasons = [];
   const r = (trade.role || '').toUpperCase();
 
-  if (r.includes('CEO'))                              { score += 30; reasons.push('CEO buy'); }
-  else if (r.includes('CFO'))                         { score += 25; reasons.push('CFO buy'); }
+  if (r.includes('CEO'))                                  { score += 30; reasons.push('CEO buy'); }
+  else if (r.includes('CFO'))                             { score += 25; reasons.push('CFO buy'); }
   else if (r.includes('COO') || r.includes('PRESIDENT')) { score += 20; reasons.push('COO/President buy'); }
-  else if (r.includes('DIRECTOR') || r.includes('DIR'))  { score += 10; reasons.push('Director buy'); }
-  else                                                { score += 8; }
+  else if (r.includes('DIR'))                             { score += 10; reasons.push('Director buy'); }
+  else                                                    { score += 8; }
 
   if (trade.amount >= 5e6)      { score += 30; reasons.push('$5M+ commitment'); }
   else if (trade.amount >= 1e6) { score += 20; reasons.push('$1M+ commitment'); }
@@ -127,7 +136,7 @@ function scoreSignal(trade, cluster, pd) {
   else if (cluster >= 3) { score += 18; reasons.push(`${cluster}-insider cluster`); }
   else if (cluster >= 2) { score += 10; reasons.push('2-insider cluster'); }
 
-  if (pd?.vsLowPct  <= 10)  { score += 15; reasons.push('Near 52W low'); }
+  if (pd?.vsLowPct  <= 10)      { score += 15; reasons.push('Near 52W low'); }
   else if (pd?.vsHighPct >= -5) { score += 12; reasons.push('Near 52W high — catalyst signal'); }
 
   if (trade.is10b51)           { score -= 15; reasons.push('10b5-1 plan'); }
@@ -177,7 +186,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { days='7', industry='all', role='all', minAmount='0', signal='all', search='', refresh='false' } = req.query;
-  const cacheKey = `insider:v5:${days}`;
+  const cacheKey = `insider:v6:${days}`;
 
   try {
     let trades = refresh === 'true' ? null : await redisGet(cacheKey);

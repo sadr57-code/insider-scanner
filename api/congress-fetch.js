@@ -38,16 +38,21 @@ export default async function handler(req, res) {
       start_urls: ['https://www.capitoltrades.com/trades?pageSize=96&txDate=90d'],
     };
 
-    // Start run with webhook — returns immediately
+    // Start run with webhook in request body — returns immediately
     const runRes = await fetch(
-      `https://api.apify.com/v2/acts/${encodeURIComponent(ACTOR_ID)}/runs?token=${APIFY_KEY}&webhooks=${encodeURIComponent(JSON.stringify([{
-        eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED'],
-        requestUrl: webhookUrl,
-      }]))}`,
+      `https://api.apify.com/v2/acts/${encodeURIComponent(ACTOR_ID)}/runs?token=${APIFY_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
+        body: JSON.stringify({
+          ...input,
+          webhooks: [
+            {
+              eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED'],
+              requestUrl: webhookUrl,
+            },
+          ],
+        }),
       }
     );
 

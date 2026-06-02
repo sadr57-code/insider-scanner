@@ -167,7 +167,7 @@ function CongressTab() {
       {source === 'mock' && (
         <div style={{ margin:'10px 16px 0', padding:'8px 14px', background:'#fffbeb', border:'0.5px solid #fcd34d', borderRadius:8, fontSize:11, color:'#92400e', display:'flex', alignItems:'center', gap:8 }}>
           <span>⚠</span>
-          <span>Demo data — add <strong>QUIVER_API_KEY</strong> to Vercel env vars for live congressional trade data.</span>
+          <span>Demo data — add <strong>APIFY_API_KEY</strong> to Vercel env vars for live congressional trade data. {errorMsg && <span style={{color:'#dc2626'}}> Error: {errorMsg}</span>}</span>
         </div>
       )}
 

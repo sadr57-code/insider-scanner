@@ -41,6 +41,8 @@ export default async function handler(req, res) {
       }
     }
 
+    console.log('[congress] APIFY_KEY present:', !!APIFY_KEY, 'length:', APIFY_KEY?.length);
+
     const trades = APIFY_KEY
       ? await fetchApify({ ticker, politician })
       : getMockTrades(ticker);
@@ -50,8 +52,8 @@ export default async function handler(req, res) {
     return res.json({ ok: true, trades, source: APIFY_KEY ? 'apify' : 'mock' });
 
   } catch (err) {
-    console.error('[congress]', err);
-    // Always fall back to mock on error — never show a broken UI
+    console.error('[congress] ERROR:', err.message, err.stack);
+    // Fall back to mock on error — expose error message for debugging
     return res.json({ ok: true, trades: getMockTrades(ticker), source: 'mock', error: err.message });
   }
 }

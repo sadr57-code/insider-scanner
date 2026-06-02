@@ -53,9 +53,12 @@ export default async function handler(req, res) {
 // ─── QuiverQuant fetch ────────────────────────────────────────────────────────
 
 async function fetchQuiver(ticker) {
+  // Correct endpoints per QuiverQuant API docs:
+  // Bulk feed:  /beta/bulk/congresstrading
+  // By ticker:  /beta/historical/congresstrading/{TICKER}
   const url = ticker
     ? `${QUIVER_BASE}/historical/congresstrading/${ticker.toUpperCase()}`
-    : `${QUIVER_BASE}/live/congresstrading`;
+    : `${QUIVER_BASE}/bulk/congresstrading`;
 
   const r = await fetch(url, {
     headers: {

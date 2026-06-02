@@ -34,8 +34,10 @@ export default async function handler(req, res) {
     console.log('[congress-fetch] Starting Apify run, webhook:', webhookUrl);
 
     const input = {
+      maxItems: 192,
       max_page: 2,
-      start_urls: ['https://www.capitoltrades.com/trades?pageSize=96&txDate=90d'],
+      startUrls: [{ url: 'https://www.capitoltrades.com/trades?pageSize=96&txDate=90d' }],
+      start_urls: [{ url: 'https://www.capitoltrades.com/trades?pageSize=96&txDate=90d' }],
     };
 
     // Start run with webhook in request body — returns immediately

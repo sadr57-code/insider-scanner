@@ -5,7 +5,7 @@
     { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
   "crons": [
-    { "path": "/api/congress-fetch", "schedule": "0 */2 * * *" }
+    { "path": "/api/congress-fetch", "schedule": "0 9 * * 1-5" }
   ],
   "functions": {
     "api/insiders.js":         { "maxDuration": 30 },

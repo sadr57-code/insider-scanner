@@ -70,6 +70,328 @@ function MetricCard({ label, value, sub }) {
   );
 }
 
+
+// ── CongressTab ──────────────────────────────────────────────────────────────
+function CongressTab() {
+  const [trades,    setTrades]   = useState([]);
+  const [loading,   setLoading]  = useState(false);
+  const [error,     setError]    = useState('');
+  const [source,    setSource]   = useState(null);
+  const [fetchedAt, setFetchedAt]= useState(null);
+
+  const [chamber,   setChamber]  = useState('All');
+  const [party,     setParty]    = useState('All');
+  const [txType,    setTxType]   = useState('All');
+  const [lateOnly,  setLateOnly] = useState(false);
+  const [ticker,    setTicker]   = useState('');
+  const [search,    setSearch]   = useState('');
+  const [period,    setPeriod]   = useState(90);
+  const [sortCol,   setSortCol]  = useState('tradeDate');
+  const [sortDir,   setSortDir]  = useState(-1);
+  const [expanded,  setExpanded] = useState({});
+
+  const fetchTrades = useCallback(async (bust = false) => {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('/api/congress' + (bust ? '?bust=1' : ''));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'API error');
+      setTrades(data.trades || []);
+      setSource(data.source);
+      setFetchedAt(new Date().toLocaleTimeString());
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchTrades(); }, []); // eslint-disable-line
+
+  function handleSort(col) {
+    if (sortCol === col) setSortDir(d => d * -1);
+    else { setSortCol(col); setSortDir(-1); }
+  }
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - period);
+
+  const filtered = [...trades]
+    .filter(t => {
+      if (chamber !== 'All' && t.chamber !== chamber) return false;
+      if (party   !== 'All' && t.party   !== party)   return false;
+      if (txType  !== 'All' && t.transaction !== txType) return false;
+      if (lateOnly && !t.lateFlag) return false;
+      if (ticker && !t.ticker.includes(ticker.toUpperCase())) return false;
+      if (search && !t.representative.toLowerCase().includes(search.toLowerCase())) return false;
+      if (t.tradeDate && new Date(t.tradeDate) < cutoff) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const av = a[sortCol] ?? '', bv = b[sortCol] ?? '';
+      if (sortCol === 'amount' || sortCol === 'reportingGap')
+        return ((Number(av)||0) - (Number(bv)||0)) * sortDir;
+      return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * sortDir;
+    });
+
+  const SortTh = ({ col, children }) => (
+    <th onClick={() => handleSort(col)} style={{
+      padding:'8px 10px', textAlign:'left', fontSize:11,
+      color: sortCol===col ? '#1d4ed8' : '#6b7280',
+      fontWeight:500, cursor:'pointer', whiteSpace:'nowrap', userSelect:'none',
+      background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb',
+    }}>
+      {children} <span style={{ opacity:.5 }}>{sortCol===col ? (sortDir>0?'↑':'↓') : '↕'}</span>
+    </th>
+  );
+
+  const partyColor = p => p==='R' ? '#dc2626' : p==='D' ? '#1d4ed8' : '#6b7280';
+  const partyBg    = p => p==='R' ? '#fef2f2' : p==='D' ? '#eff6ff' : '#f3f4f6';
+  const txColor    = t => t==='Buy'  ? '#065f46' : t==='Sell' ? '#dc2626' : '#6b7280';
+  const txBg       = t => t==='Buy'  ? '#d1fae5' : t==='Sell' ? '#fef2f2' : '#f3f4f6';
+
+  const buys  = filtered.filter(t => t.transaction==='Buy').length;
+  const sells = filtered.filter(t => t.transaction==='Sell').length;
+  const late  = filtered.filter(t => t.lateFlag).length;
+
+  const selStyle = {
+    padding:'5px 8px', fontSize:12, border:'0.5px solid #d1d5db',
+    borderRadius:7, background:'#fff', color:'#111827', height:30,
+  };
+  const btnStyle = {
+    padding:'5px 12px', fontSize:12, border:'0.5px solid #d1d5db',
+    borderRadius:7, background:'#fff', cursor:'pointer', color:'#374151',
+  };
+
+  return (
+    <div>
+      {/* Mock data banner */}
+      {source === 'mock' && (
+        <div style={{ margin:'10px 16px 0', padding:'8px 14px', background:'#fffbeb', border:'0.5px solid #fcd34d', borderRadius:8, fontSize:11, color:'#92400e', display:'flex', alignItems:'center', gap:8 }}>
+          <span>⚠</span>
+          <span>Demo data — add <strong>QUIVER_API_KEY</strong> to Vercel env vars for live congressional trade data.</span>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb', padding:'10px 16px', display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+
+        {/* Period */}
+        <div style={{ display:'flex', gap:4 }}>
+          {[30,60,90,365].map(d => (
+            <button key={d} onClick={() => setPeriod(d)} style={{
+              fontSize:11, padding:'4px 10px', borderRadius:20, cursor:'pointer',
+              background: period===d ? '#1d4ed8' : '#fff',
+              color:      period===d ? '#fff'    : '#6b7280',
+              border:     period===d ? 'none'    : '0.5px solid #d1d5db',
+              fontWeight: period===d ? 600       : 400,
+            }}>{d===365 ? '1Y' : d+'d'}</button>
+          ))}
+        </div>
+
+        <div style={{ width:1, height:20, background:'#e5e7eb' }} />
+
+        {/* Chamber */}
+        <select style={selStyle} value={chamber} onChange={e => setChamber(e.target.value)}>
+          {['All','Senate','House'].map(c => <option key={c}>{c}</option>)}
+        </select>
+
+        {/* Party */}
+        <select style={selStyle} value={party} onChange={e => setParty(e.target.value)}>
+          <option value="All">All Parties</option>
+          <option value="R">Republican</option>
+          <option value="D">Democrat</option>
+          <option value="I">Independent</option>
+        </select>
+
+        {/* Transaction type */}
+        <select style={selStyle} value={txType} onChange={e => setTxType(e.target.value)}>
+          <option value="All">All Trades</option>
+          <option value="Buy">Buys only</option>
+          <option value="Sell">Sells only</option>
+        </select>
+
+        {/* Late flag */}
+        <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:12, color: lateOnly ? '#92400e' : '#6b7280', cursor:'pointer' }}>
+          <input type="checkbox" checked={lateOnly} onChange={e => setLateOnly(e.target.checked)} />
+          Late filers only
+        </label>
+
+        {/* Ticker search */}
+        <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+          placeholder="Ticker..." style={{ ...selStyle, width:80, textTransform:'uppercase' }} />
+
+        {/* Rep search */}
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search rep..." style={{ ...selStyle, width:140 }} />
+
+        <button style={{ ...btnStyle, marginLeft:'auto', color:'#6b7280', fontSize:11 }}
+          onClick={() => { setChamber('All'); setParty('All'); setTxType('All'); setLateOnly(false); setTicker(''); setSearch(''); setPeriod(90); }}>
+          Clear filters
+        </button>
+        <button style={{ ...btnStyle, background:'#1d4ed8', color:'#fff', border:'none' }}
+          onClick={() => fetchTrades(true)} disabled={loading}>
+          {loading ? '…' : '↻ Refresh'}
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display:'flex', gap:10, padding:'12px 16px', flexWrap:'wrap' }}>
+        <div style={{ background:'#f9fafb', border:'0.5px solid #e5e7eb', borderRadius:10, padding:'12px 16px', flex:'1 1 120px' }}>
+          <div style={{ fontSize:11, color:'#6b7280', marginBottom:4 }}>Total Trades</div>
+          <div style={{ fontSize:22, fontWeight:600, color:'#111827' }}>{filtered.length}</div>
+          <div style={{ fontSize:11, color:'#9ca3af' }}>{fetchedAt ? 'as of ' + fetchedAt : ''}</div>
+        </div>
+        <div style={{ background:'#d1fae5', border:'0.5px solid #6ee7b7', borderRadius:10, padding:'12px 16px', flex:'1 1 120px' }}>
+          <div style={{ fontSize:11, color:'#065f46', marginBottom:4 }}>Buys</div>
+          <div style={{ fontSize:22, fontWeight:600, color:'#065f46' }}>{buys}</div>
+          <div style={{ fontSize:11, color:'#6ee7b7' }}>{filtered.length ? Math.round(buys/filtered.length*100) : 0}% of shown</div>
+        </div>
+        <div style={{ background:'#fef2f2', border:'0.5px solid #fca5a5', borderRadius:10, padding:'12px 16px', flex:'1 1 120px' }}>
+          <div style={{ fontSize:11, color:'#991b1b', marginBottom:4 }}>Sells</div>
+          <div style={{ fontSize:22, fontWeight:600, color:'#dc2626' }}>{sells}</div>
+          <div style={{ fontSize:11, color:'#fca5a5' }}>{filtered.length ? Math.round(sells/filtered.length*100) : 0}% of shown</div>
+        </div>
+        {late > 0 && (
+          <div style={{ background:'#fffbeb', border:'0.5px solid #fcd34d', borderRadius:10, padding:'12px 16px', flex:'1 1 120px' }}>
+            <div style={{ fontSize:11, color:'#92400e', marginBottom:4 }}>Late Filings</div>
+            <div style={{ fontSize:22, fontWeight:600, color:'#d97706' }}>{late}</div>
+            <div style={{ fontSize:11, color:'#fcd34d' }}>Filed {'>'} 30d after trade</div>
+          </div>
+        )}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{ margin:'0 16px 12px', padding:'10px 14px', background:'#fef2f2', border:'0.5px solid #fca5a5', borderRadius:8, fontSize:12, color:'#dc2626' }}>
+          ⚠ {error}
+        </div>
+      )}
+
+      {/* Table */}
+      <div style={{ margin:'0 16px', border:'0.5px solid #e5e7eb', borderRadius:12, overflow:'hidden' }}>
+        {loading && trades.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'48px 0', color:'#9ca3af', fontSize:13 }}>
+            Loading congressional trade data…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'48px 0', color:'#9ca3af', fontSize:13 }}>
+            No trades match current filters
+          </div>
+        ) : (
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead>
+              <tr>
+                <SortTh col="tradeDate">Trade Date</SortTh>
+                <SortTh col="reportDate">Report Date</SortTh>
+                <SortTh col="reportingGap">Gap (d)</SortTh>
+                <SortTh col="representative">Representative</SortTh>
+                <SortTh col="chamber">Chamber</SortTh>
+                <SortTh col="party">Party</SortTh>
+                <SortTh col="ticker">Ticker</SortTh>
+                <SortTh col="transaction">Type</SortTh>
+                <SortTh col="amount">Size</SortTh>
+                <SortTh col="excessReturn">Excess Ret</SortTh>
+                <SortTh col="priceChange">Price Chg</SortTh>
+                <th style={{ background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb', padding:'8px 10px', width:28 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((t, i) => {
+                const rowKey = t.id || i;
+                const isOpen = !!expanded[rowKey];
+                const lateBg = t.lateFlag ? '#fffbeb' : '';
+                return [
+                  <tr key={rowKey}
+                    onClick={() => setExpanded(prev => ({ ...prev, [rowKey]: !prev[rowKey] }))}
+                    style={{ cursor:'pointer', background: lateBg, borderBottom: isOpen ? 'none' : '0.5px solid #f3f4f6', borderLeft: t.lateFlag ? '3px solid #f59e0b' : t.transaction==='Buy' ? '3px solid #6ee7b7' : '3px solid #fca5a5' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                    onMouseLeave={e => e.currentTarget.style.background = lateBg}>
+
+                    <td style={{ padding:'9px 10px', color:'#9ca3af', whiteSpace:'nowrap' }}>{t.tradeDate || '—'}</td>
+                    <td style={{ padding:'9px 10px', color:'#9ca3af', whiteSpace:'nowrap' }}>{t.reportDate || '—'}</td>
+                    <td style={{ padding:'9px 10px', whiteSpace:'nowrap' }}>
+                      {t.reportingGap != null ? (
+                        <span style={{ color: t.lateFlag ? '#d97706' : t.reportingGap > 14 ? '#6b7280' : '#065f46', fontWeight: t.lateFlag ? 600 : 400 }}>
+                          {t.lateFlag && '⚠ '}{t.reportingGap}d
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td style={{ padding:'9px 10px', fontWeight:600, whiteSpace:'nowrap' }}>{t.representative}</td>
+                    <td style={{ padding:'9px 10px' }}>
+                      <span style={{ fontSize:10, padding:'2px 7px', borderRadius:10, fontWeight:500, color: t.chamber==='Senate' ? '#4c1d95' : '#1e40af', background: t.chamber==='Senate' ? '#ede9fe' : '#dbeafe' }}>
+                        {t.chamber==='Senate' ? 'SEN' : 'REP'}
+                      </span>
+                    </td>
+                    <td style={{ padding:'9px 10px' }}>
+                      <span style={{ fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:10, color: partyColor(t.party), background: partyBg(t.party) }}>
+                        {t.party}
+                      </span>
+                    </td>
+                    <td style={{ padding:'9px 10px', fontWeight:600, color:'#1d4ed8', fontSize:13 }}>{t.ticker}</td>
+                    <td style={{ padding:'9px 10px' }}>
+                      <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:10, color: txColor(t.transaction), background: txBg(t.transaction) }}>
+                        {t.transaction==='Buy' ? '▲ BUY' : t.transaction==='Sell' ? '▼ SELL' : t.transaction}
+                      </span>
+                    </td>
+                    <td style={{ padding:'9px 10px', fontWeight:500, color: t.amount>=500000 ? '#92400e' : t.amount>=100000 ? '#4c1d95' : '#374151' }}>
+                      {t.range || '—'}
+                    </td>
+                    <td style={{ padding:'9px 10px', fontWeight:500, color: t.excessReturn?.startsWith('-') ? '#dc2626' : '#065f46' }}>
+                      {t.excessReturn || '—'}
+                    </td>
+                    <td style={{ padding:'9px 10px', color: t.priceChange?.startsWith('-') ? '#dc2626' : '#065f46' }}>
+                      {t.priceChange || '—'}
+                    </td>
+                    <td style={{ padding:'9px 10px', color:'#9ca3af', textAlign:'center' }}>
+                      <span style={{ transition:'transform .2s', display:'inline-block', transform: isOpen ? 'rotate(180deg)' : '' }}>▾</span>
+                    </td>
+                  </tr>,
+                  isOpen && (
+                    <tr key={rowKey + '-detail'} style={{ background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb' }}>
+                      <td colSpan={12} style={{ padding:'12px 16px' }}>
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:8, marginBottom:10 }}>
+                          {[
+                            ['Chamber',       t.chamber],
+                            ['Party',         t.party==='R' ? 'Republican' : t.party==='D' ? 'Democrat' : t.party],
+                            ['Ticker Type',   t.tickerType || 'Stock'],
+                            ['Reporting Gap', t.reportingGap != null ? t.reportingGap + ' days' : '—'],
+                            ['Late Filing',   t.lateFlag ? '⚠ Yes (>30 days)' : 'No'],
+                            ['Excess Return', t.excessReturn || '—'],
+                          ].map(([k,v]) => (
+                            <div key={k} style={{ background:'#fff', border:'0.5px solid #e5e7eb', borderRadius:8, padding:'8px 10px' }}>
+                              <div style={{ fontSize:10, color:'#6b7280', marginBottom:3 }}>{k}</div>
+                              <div style={{ fontSize:13, fontWeight:500 }}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display:'flex', gap:8 }}>
+                          <a href={'https://www.capitoltrades.com/trades?politician=' + encodeURIComponent(t.representative)}
+                            target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                            style={{ fontSize:11, padding:'4px 12px', border:'0.5px solid #d1d5db', borderRadius:7, color:'#1d4ed8', textDecoration:'none', background:'#fff' }}>
+                            Capitol Trades ↗
+                          </a>
+                          <a href={'https://www.quiverquant.com/congresstrading/stock/' + t.ticker}
+                            target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                            style={{ fontSize:11, padding:'4px 12px', border:'0.5px solid #d1d5db', borderRadius:7, color:'#374151', textDecoration:'none', background:'#fff' }}>
+                            QuiverQuant ↗
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  ),
+                ];
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={{ padding:'10px 16px', fontSize:10, color:'#9ca3af' }}>
+        Source: STOCK Act disclosures via QuiverQuant · Congress members must report trades within 45 days · {filtered.length} transactions shown
+      </div>
+    </div>
+  );
+}
+
 export default function InsiderScanner({ user, onLogout, onAdmin }) {
   const [trades,    setTrades]   = useState([]);
   const [meta,      setMeta]     = useState({});
@@ -79,6 +401,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
   const [expanded,  setExpanded] = useState({});
 
   // Filters
+  const [activeTab, setActiveTab] = useState('insider'); // 'insider' | 'congress'
   const [days,      setDays]     = useState(7);
   const [industry,  setIndustry] = useState('All');
   const [role,      setRole]     = useState('All');
@@ -244,6 +567,26 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
         </div>
       </div>
 
+      {/* ── Tab bar ─────────────────────────────────────────────────────────── */}
+      <div style={{ display:'flex', borderBottom:'0.5px solid #e5e7eb', background:'#fff', padding:'0 16px' }}>
+        {[
+          { id:'insider',  label:'📊 Corporate Insiders', sub:'SEC Form 4' },
+          { id:'congress', label:'🏛 Congress Trades',    sub:'STOCK Act' },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            padding:'10px 20px', fontSize:13, fontWeight: activeTab===tab.id ? 700 : 400,
+            border:'none', borderBottom: activeTab===tab.id ? '2px solid #1d4ed8' : '2px solid transparent',
+            background:'transparent', color: activeTab===tab.id ? '#1d4ed8' : '#6b7280',
+            cursor:'pointer', marginBottom:'-1px', display:'flex', flexDirection:'column', alignItems:'center', gap:2,
+          }}>
+            {tab.label}
+            <span style={{ fontSize:9, color: activeTab===tab.id ? '#93c5fd' : '#9ca3af', fontWeight:400 }}>{tab.sub}</span>
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'congress' ? <CongressTab /> : null}
+      {activeTab !== 'congress' ? <>
       {/* ── Filters ────────────────────────────────────────────────────────── */}
       <div style={{ background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb', padding:'10px 16px', display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
         {/* Period pills */}
@@ -443,6 +786,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
       <div style={{ padding:'10px 16px', fontSize:10, color:'#9ca3af' }}>
         Source: SEC EDGAR Form 4 · Open-market purchases (Code P) only · {trades.length} transactions shown
       </div>
+      </> : null}
     </div>
   );
 }

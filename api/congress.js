@@ -21,15 +21,6 @@ export default async function handler(req, res) {
   const { ticker, bust } = req.query;
 
   try {
-    // Bust cache — trigger a fresh background fetch then return mock while it runs
-    if (bust && APIFY_KEY) {
-      // Fire-and-forget: kick off the cron endpoint to refresh cache
-      fetch(`${getBaseUrl(req)}/api/congress-fetch`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${process.env.CRON_SECRET || ''}` },
-      }).catch(() => {}); // don't await — just trigger it
-    }
-
     // Always serve from Redis cache
     const cached = await redis.get(CACHE_KEY);
     const lastUpdated = await redis.get('congress:feed:lastUpdated');
@@ -64,12 +55,6 @@ export default async function handler(req, res) {
     console.error('[congress] ERROR:', err.message);
     return res.json({ ok: true, trades: getMockTrades(ticker), source: 'mock', error: err.message });
   }
-}
-
-function getBaseUrl(req) {
-  const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  return `${proto}://${host}`;
 }
 
 // ─── Mock data fallback ───────────────────────────────────────────────────────

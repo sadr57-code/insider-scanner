@@ -40,8 +40,11 @@ export default async function handler(req, res) {
     };
 
     // Use async run — start the run
+    console.log('[congress-fetch] Calling Apify API, actor:', ACTOR_ID);
+    console.log('[congress-fetch] Key length:', APIFY_KEY?.length);
+
     const runRes = await fetch(
-      `https://api.apify.com/v2/acts/${ACTOR_ID}/runs?token=${APIFY_KEY}`,
+      `https://api.apify.com/v2/acts/${encodeURIComponent(ACTOR_ID)}/runs?token=${APIFY_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -49,14 +52,17 @@ export default async function handler(req, res) {
       }
     );
 
+    const runText = await runRes.text();
+    console.log('[congress-fetch] Run start response status:', runRes.status);
+    console.log('[congress-fetch] Run start response:', runText.slice(0, 300));
+
     if (!runRes.ok) {
-      const err = await runRes.text();
-      throw new Error(`Apify run start failed: ${runRes.status} ${err.slice(0, 200)}`);
+      throw new Error(`Apify run start failed: ${runRes.status} ${runText.slice(0, 200)}`);
     }
 
-    const runData = await runRes.json();
+    const runData = JSON.parse(runText);
     const runId = runData.data?.id;
-    if (!runId) throw new Error('No run ID returned from Apify');
+    if (!runId) throw new Error(`No run ID returned. Response: ${runText.slice(0, 200)}`);
 
     console.log('[congress-fetch] Run started:', runId);
 
@@ -84,9 +90,11 @@ export default async function handler(req, res) {
       throw new Error(`Apify run ended with status: ${status}`);
     }
 
-    // Fetch dataset results
+    // Fetch dataset results using the run's defaultDatasetId
+    const datasetId = statusData.data?.defaultDatasetId || runId;
+    console.log('[congress-fetch] Fetching dataset:', datasetId);
     const dataRes = await fetch(
-      `https://api.apify.com/v2/acts/${ACTOR_ID}/runs/${runId}/dataset/items?token=${APIFY_KEY}&clean=true`
+      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_KEY}&clean=true`
     );
     if (!dataRes.ok) throw new Error(`Dataset fetch failed: ${dataRes.status}`);
 

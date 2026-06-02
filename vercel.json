@@ -8,11 +8,13 @@
     "api/insiders.js": {
       "maxDuration": 30
     },
-    "api/users.js": {
-      "maxDuration": 10
-    },
     "api/debug.js": {
       "maxDuration": 15
+    },
+    "api/congress.js": {
+      "maxDuration": 60
     }
   }
 }
+'@
+[System.IO.File]::WriteAllText("C:\Trading\insider-scanner-app\vercel.json", $content, [System.Text.UTF8Encoding]::new($false))

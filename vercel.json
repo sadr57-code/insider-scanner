@@ -1,4 +1,3 @@
-$content = @'
 {
   "version": 2,
   "framework": "create-react-app",
@@ -20,5 +19,3 @@ $content = @'
     }
   }
 }
-'@
-[System.IO.File]::WriteAllText("C:\Trading\insider-scanner-app\vercel.json", $content, [System.Text.UTF8Encoding]::new($false))

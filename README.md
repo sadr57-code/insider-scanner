@@ -129,3 +129,4 @@ Use the Admin → Cache tab to force a refresh.
 | Indirect ownership  | -5     |
 
 Score ≥ 60 → Strong | 35–59 → Moderate | < 35 → Weak
+ 

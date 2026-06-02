@@ -20,22 +20,28 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   try {
+    console.log('[congress-seed] body type:', typeof req.body, 'isArray:', Array.isArray(req.body));
+    console.log('[congress-seed] body length:', JSON.stringify(req.body).slice(0, 100));
+
     const raw = req.body;
     const items = Array.isArray(raw) ? raw : (raw.items || raw.data || []);
 
-    if (!items.length) return res.status(400).json({ error: 'No items in body' });
+    console.log('[congress-seed] items count:', items.length);
+    if (!items.length) return res.status(400).json({ error: 'No items in body', bodyType: typeof raw, bodyKeys: typeof raw === 'object' ? Object.keys(raw).slice(0,5) : [] });
 
     const trades = items.map(normalizeApify).filter(Boolean);
+    console.log('[congress-seed] normalized trades:', trades.length);
 
+    console.log('[congress-seed] writing to Redis...');
     await redis.set('congress:feed:latest', trades, { ex: CACHE_TTL });
     await redis.set('congress:feed:lastUpdated', new Date().toISOString(), { ex: CACHE_TTL });
 
-    console.log(`[congress-seed] Stored ${trades.length} trades`);
+    console.log(`[congress-seed] Done — stored ${trades.length} trades`);
     return res.json({ ok: true, count: trades.length, sample: trades[0] });
 
   } catch (err) {
-    console.error('[congress-seed]', err.message);
-    return res.status(500).json({ ok: false, error: err.message });
+    console.error('[congress-seed] ERROR:', err.message, err.stack?.slice(0, 300));
+    return res.status(500).json({ ok: false, error: err.message, stack: err.stack?.slice(0, 200) });
   }
 }
 

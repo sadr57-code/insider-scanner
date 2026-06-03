@@ -118,8 +118,15 @@ async function fetchAllTickers() {
 async function fetchTicker(ticker) {
   const proxyUrl = 'https://raspy-wood-5ad3.sadr57.workers.dev';
   const url = `${proxyUrl}/?ticker=${encodeURIComponent(ticker)}`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Proxy ${r.status} for ${ticker}`);
+  console.log('[congress] fetching:', url);
+  let r;
+  try {
+    r = await fetch(url);
+  } catch(e) {
+    throw new Error(`Proxy fetch threw for ${ticker}: ${e.message}`);
+  }
+  console.log('[congress] proxy status for', ticker, ':', r.status);
+  if (!r.ok) throw new Error(`Proxy ${r.status} for ${ticker}: ${await r.text().then(t=>t.slice(0,100))}`);
   const raw = await r.json();
   return (Array.isArray(raw) ? raw : [])
     .map(t => normalizeQuiver(t, ticker))

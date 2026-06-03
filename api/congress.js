@@ -74,40 +74,32 @@ export default async function handler(req, res) {
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
 async function fetchAllTickers() {
-  const BATCH_SIZE = 10;  // fetch all 20 in 2 batches
-  const DELAY_MS   = 100; // minimal delay between batches
-  const CUTOFF     = new Date();
-  CUTOFF.setDate(CUTOFF.getDate() - 90); // last 90 days only
+  const CUTOFF = new Date();
+  CUTOFF.setDate(CUTOFF.getDate() - 90);
 
-  const allTrades = [];
+  const proxyUrl = 'https://raspy-wood-5ad3.sadr57.workers.dev';
+  const tickerList = WATCH_TICKERS.join(',');
+  const url = `${proxyUrl}/?tickers=${encodeURIComponent(tickerList)}`;
+
+  console.log('[congress] bulk fetch:', url);
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Bulk proxy ${r.status}: ${await r.text().then(t => t.slice(0, 100))}`);
+
+  const raw = await r.json();
+  const arr = Array.isArray(raw) ? raw : [];
+
   const seen = new Set();
+  const allTrades = [];
 
-  for (let i = 0; i < WATCH_TICKERS.length; i += BATCH_SIZE) {
-    const batch = WATCH_TICKERS.slice(i, i + BATCH_SIZE);
-
-    const results = await Promise.allSettled(
-      batch.map(t => fetchTicker(t))
-    );
-
-    for (const result of results) {
-      if (result.status !== 'fulfilled') continue;
-      for (const trade of result.value) {
-        // Dedupe by id
-        if (seen.has(trade.id)) continue;
-        // Filter to last 90 days
-        if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
-        seen.add(trade.id);
-        allTrades.push(trade);
-      }
-    }
-
-    // Delay between batches
-    if (i + BATCH_SIZE < WATCH_TICKERS.length) {
-      await new Promise(r => setTimeout(r, DELAY_MS));
-    }
+  for (const t of arr) {
+    const trade = normalizeQuiver(t, t.Ticker || '');
+    if (!trade) continue;
+    if (seen.has(trade.id)) continue;
+    if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
+    seen.add(trade.id);
+    allTrades.push(trade);
   }
 
-  // Sort by trade date descending
   return allTrades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
 }
 

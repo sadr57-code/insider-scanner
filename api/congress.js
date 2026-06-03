@@ -36,7 +36,7 @@ export default async function handler(req, res) {
 
   // Per-ticker lookup — always fresh from API
   if (ticker) {
-    if (!QUIVER_KEY) return res.json({ ok: true, trades: getMockTrades(ticker), source: 'mock' });
+    // proxy handles auth — no key check needed
     try {
       const trades = await fetchTicker(ticker.toUpperCase());
       return res.json({ ok: true, trades, source: 'quiver' });
@@ -56,11 +56,7 @@ export default async function handler(req, res) {
       }
     }
 
-    if (!QUIVER_KEY) {
-      return res.json({ ok: true, trades: getMockTrades(), source: 'mock', error: 'QUIVER_API_KEY not set' });
-    }
-
-    // Fetch all tickers in parallel — batch to avoid rate limits
+    // Fetch all tickers via Cloudflare proxy (no API key needed here)
     const trades = await fetchAllTickers();
 
     await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });

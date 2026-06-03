@@ -79,7 +79,7 @@ async function fetchAllTickers() {
 
   const proxyUrl = 'https://raspy-wood-5ad3.sadr57.workers.dev';
   const tickerList = WATCH_TICKERS.join(',');
-  const url = `${proxyUrl}/?tickers=${encodeURIComponent(tickerList)}`;
+  const url = `${proxyUrl}/?tickers=${tickerList}`;
 
   console.log('[congress] bulk fetch:', url);
   const r = await fetch(url);

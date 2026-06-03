@@ -81,7 +81,7 @@ async function fetchAllTickers() {
   const allTrades = [];
 
   const results = await Promise.allSettled(
-    WATCH_TICKERS.map(t => fetchTickerDirect(t))
+    WATCH_TICKERS.map(t => fetchTicker(t))
   );
 
   for (const result of results) {
@@ -97,19 +97,24 @@ async function fetchAllTickers() {
   return allTrades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
 }
 
-async function fetchTickerDirect(ticker) {
+async function fetchTicker(ticker) {
   const url = `https://api.quiverquant.com/beta/historical/congresstrading/${encodeURIComponent(ticker)}`;
+  console.log('[congress] fetching direct:', ticker);
   const r = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${process.env.QUIVER_API_KEY}`,
+      Authorization: `Bearer ${QUIVER_KEY}`,
       Accept: 'application/json',
       'User-Agent': 'Mozilla/5.0',
     },
   });
   if (!r.ok) throw new Error(`QuiverQuant ${r.status} for ${ticker}`);
   const raw = await r.json();
-  return (Array.isArray(raw) ? raw : []).map(t => normalizeQuiver(t, ticker));
-}// ─── Normalize QuiverQuant response ──────────────────────────────────────────
+  return (Array.isArray(raw) ? raw : [])
+    .map(t => normalizeQuiver(t, ticker))
+    .filter(Boolean);
+}
+
+// ─── Normalize QuiverQuant response ──────────────────────────────────────────
 // Confirmed fields from live API: Representative, BioGuideID, ReportDate,
 // TransactionDate, Ticker, Transaction, Range, House, Party, Amount
 

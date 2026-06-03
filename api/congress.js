@@ -81,9 +81,10 @@ async function fetchAllTickers() {
   const seen = new Set();
   const allTrades = [];
 
-  const results = await Promise.allSettled(
-    WATCH_TICKERS.map(t => fetchTicker(t))
-  );
+  const results = [];
+  for (const t of WATCH_TICKERS) {
+    results.push(await fetchTicker(t).then(v => ({status:'fulfilled',value:v})).catch(e => ({status:'rejected',reason:e})));
+  }
 
   for (const result of results) {
     if (result.status !== 'fulfilled') continue;

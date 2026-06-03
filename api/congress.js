@@ -1,5 +1,5 @@
-// api/congress.js -- Political trades via QuiverQuant (Hobbyist plan)
-// Uses bulk endpoint: /beta/bulk/congress/politicians
+// api/congress.js -- Political trades via QuiverQuant
+// Uses /beta/bulk/congresstrading endpoint -- single paginated call
 // Redis cache: 2hr TTL
 
 import { Redis } from '@upstash/redis';
@@ -10,7 +10,7 @@ const redis = new Redis({
 });
 
 const QUIVER_KEY = process.env.QUIVER_API_KEY;
-const CACHE_KEY  = 'congress:feed:latest';
+const CACHE_KEY  = 'congress:feed:v2:latest';
 const CACHE_TTL  = 7200; // 2hrs
 
 export default async function handler(req, res) {
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   // Debug endpoint
   if (req.query.debug) {
     try {
-      const r = await fetch('https://api.quiverquant.com/beta/bulk/congress/politicians', {
+      const r = await fetch('https://api.quiverquant.com/beta/bulk/congresstrading?page_size=5&page=1', {
         headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
       });
       return res.json({ status: r.status, keyPresent: !!QUIVER_KEY, keyFirst6: (QUIVER_KEY||'').slice(0,6) });
@@ -68,39 +68,43 @@ export default async function handler(req, res) {
   }
 }
 
-// Single bulk call -- returns all recent trades
+// Bulk fetch -- pages 1-3 (up to 150 trades), filtered to last 90 days
 async function fetchBulk() {
-  const url = 'https://api.quiverquant.com/beta/bulk/congress/politicians';
-  console.log('[congress] bulk fetch:', url);
-  const r = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${QUIVER_KEY}`,
-      Accept: 'application/json',
-      'User-Agent': 'Mozilla/5.0',
-    },
-  });
-  console.log('[congress] bulk status:', r.status);
-  if (!r.ok) throw new Error(`QuiverQuant bulk ${r.status}`);
-  const raw = await r.json();
-
   const CUTOFF = new Date();
   CUTOFF.setDate(CUTOFF.getDate() - 90);
+
   const seen = new Set();
   const trades = [];
 
-  for (const t of (Array.isArray(raw) ? raw : [])) {
-    const trade = normalizeQuiver(t, t.Ticker || '');
-    if (!trade) continue;
-    if (seen.has(trade.id)) continue;
-    if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
-    seen.add(trade.id);
-    trades.push(trade);
+  for (let page = 1; page <= 3; page++) {
+    const url = `https://api.quiverquant.com/beta/bulk/congresstrading?page_size=50&page=${page}`;
+    console.log('[congress] fetching page', page);
+    const r = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${QUIVER_KEY}`,
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+    if (!r.ok) throw new Error(`QuiverQuant bulk ${r.status} page ${page}`);
+    const raw = await r.json();
+    if (!Array.isArray(raw) || raw.length === 0) break;
+
+    for (const t of raw) {
+      const trade = normalizeBulk(t);
+      if (!trade) continue;
+      if (seen.has(trade.id)) continue;
+      if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) break; // sorted desc, stop early
+      seen.add(trade.id);
+      trades.push(trade);
+    }
   }
 
-  return trades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
+  console.log('[congress] total trades:', trades.length);
+  return trades;
 }
 
-// Per-ticker fetch
+// Per-ticker fetch (for ticker= param)
 async function fetchTicker(ticker) {
   const url = `https://api.quiverquant.com/beta/historical/congresstrading/${encodeURIComponent(ticker)}`;
   console.log('[congress] ticker fetch:', ticker);
@@ -114,19 +118,55 @@ async function fetchTicker(ticker) {
   if (!r.ok) throw new Error(`QuiverQuant ${r.status} for ${ticker}`);
   const raw = await r.json();
   return (Array.isArray(raw) ? raw : [])
-    .map(t => normalizeQuiver(t, ticker))
+    .map(t => normalizeHistorical(t, ticker))
     .filter(Boolean);
 }
 
-function normalizeQuiver(t, tickerFallback) {
+// Normalize bulk endpoint fields
+// Fields: Name, Ticker, Traded, Filed, Transaction, Trade_Size_USD, Chamber, Party, BioGuideID, excess_return
+function normalizeBulk(t) {
   if (!t) return null;
+  const tradeDate  = t.Traded || '';
+  const reportDate = t.Filed || '';
+  const gap = tradeDate && reportDate
+    ? Math.round((new Date(reportDate) - new Date(tradeDate)) / 86400000)
+    : null;
+  const tx = (t.Transaction || '').toLowerCase();
+  const ticker = (t.Ticker || '').toUpperCase();
 
+  return {
+    id:             `${t.Name}-${ticker}-${tradeDate}-${tx}`,
+    representative: t.Name || 'Unknown',
+    ticker,
+    transaction:    tx.includes('purchase') || tx.includes('buy')  ? 'Buy'
+                  : tx.includes('sale')     || tx.includes('sell') ? 'Sell'
+                  : t.Transaction || 'Unknown',
+    range:          '--',
+    amount:         parseFloat(t.Trade_Size_USD) || 0,
+    chamber:        normalizeChamber(t.Chamber || ''),
+    party:          normalizeParty(t.Party || ''),
+    tradeDate,
+    reportDate,
+    reportingGap:   gap,
+    lateFlag:       gap !== null && gap > 45,
+    tickerType:     t.TickerType || 'Stock',
+    assetName:      t.Description || '',
+    price:          'N/A',
+    owner:          'Self',
+    excessReturn:   t.excess_return ? parseFloat(t.excess_return) : null,
+    priceChange:    null,
+    bioGuideId:     t.BioGuideID || '',
+  };
+}
+
+// Normalize historical endpoint fields (for per-ticker lookup)
+function normalizeHistorical(t, tickerFallback) {
+  if (!t) return null;
   const tradeDate  = t.TransactionDate || t.Date || '';
   const reportDate = t.ReportDate || '';
   const gap = tradeDate && reportDate
     ? Math.round((new Date(reportDate) - new Date(tradeDate)) / 86400000)
     : null;
-
   const tx = (t.Transaction || '').toLowerCase();
   const ticker = (t.Ticker || tickerFallback || '').toUpperCase();
 
@@ -149,9 +189,9 @@ function normalizeQuiver(t, tickerFallback) {
     assetName:      t.Description || '',
     price:          'N/A',
     owner:          'Self',
-    excessReturn:   t.ExcessReturn  || null,
-    priceChange:    t.PriceChange   || null,
-    bioGuideId:     t.BioGuideID    || '',
+    excessReturn:   t.ExcessReturn || null,
+    priceChange:    t.PriceChange  || null,
+    bioGuideId:     t.BioGuideID   || '',
   };
 }
 
@@ -159,7 +199,7 @@ function normalizeChamber(raw) {
   if (!raw) return 'Unknown';
   const s = raw.toLowerCase();
   if (s.includes('senate')) return 'Senate';
-  if (s.includes('house'))  return 'House';
+  if (s.includes('house') || s.includes('representatives')) return 'House';
   return raw;
 }
 

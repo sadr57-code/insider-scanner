@@ -77,51 +77,39 @@ async function fetchAllTickers() {
   const CUTOFF = new Date();
   CUTOFF.setDate(CUTOFF.getDate() - 90);
 
-  const proxyUrl = 'https://raspy-wood-5ad3.sadr57.workers.dev';
-  const tickerList = WATCH_TICKERS.join(',');
-  const url = `${proxyUrl}/?tickers=${tickerList}`;
-
-  console.log('[congress] bulk fetch:', url);
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Bulk proxy ${r.status}: ${await r.text().then(t => t.slice(0, 100))}`);
-
-  const raw = await r.json();
-  const arr = Array.isArray(raw) ? raw : [];
-
   const seen = new Set();
   const allTrades = [];
 
-  for (const t of arr) {
-    const trade = normalizeQuiver(t, t.Ticker || '');
-    if (!trade) continue;
-    if (seen.has(trade.id)) continue;
-    if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
-    seen.add(trade.id);
-    allTrades.push(trade);
+  const results = await Promise.allSettled(
+    WATCH_TICKERS.map(t => fetchTickerDirect(t))
+  );
+
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    for (const trade of result.value) {
+      if (seen.has(trade.id)) continue;
+      if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
+      seen.add(trade.id);
+      allTrades.push(trade);
+    }
   }
 
   return allTrades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
 }
 
-async function fetchTicker(ticker) {
-  const proxyUrl = 'https://raspy-wood-5ad3.sadr57.workers.dev';
-  const url = `${proxyUrl}/?ticker=${encodeURIComponent(ticker)}`;
-  console.log('[congress] fetching:', url);
-  let r;
-  try {
-    r = await fetch(url);
-  } catch(e) {
-    throw new Error(`Proxy fetch threw for ${ticker}: ${e.message}`);
-  }
-  console.log('[congress] proxy status for', ticker, ':', r.status);
-  if (!r.ok) throw new Error(`Proxy ${r.status} for ${ticker}: ${await r.text().then(t=>t.slice(0,100))}`);
+async function fetchTickerDirect(ticker) {
+  const url = `https://api.quiverquant.com/beta/historical/congresstrading/${encodeURIComponent(ticker)}`;
+  const r = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${process.env.QUIVER_API_KEY}`,
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0',
+    },
+  });
+  if (!r.ok) throw new Error(`QuiverQuant ${r.status} for ${ticker}`);
   const raw = await r.json();
-  return (Array.isArray(raw) ? raw : [])
-    .map(t => normalizeQuiver(t, ticker))
-    .filter(Boolean);
-}
-
-// ─── Normalize QuiverQuant response ──────────────────────────────────────────
+  return (Array.isArray(raw) ? raw : []).map(t => normalizeQuiver(t, ticker));
+}// ─── Normalize QuiverQuant response ──────────────────────────────────────────
 // Confirmed fields from live API: Representative, BioGuideID, ReportDate,
 // TransactionDate, Ticker, Transaction, Range, House, Party, Amount
 

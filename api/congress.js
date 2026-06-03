@@ -34,16 +34,17 @@ export default async function handler(req, res) {
 
   const { ticker, bust } = req.query;
 
-if (req.query.debug) {
-  try {
-    const r = await fetch('https://api.quiverquant.com/beta/historical/congresstrading/AAPL', {
-      headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
-    });
-    return res.json({ status: r.status, keyPresent: !!QUIVER_KEY, keyFirst6: (QUIVER_KEY||'').slice(0,6) });
-  } catch(e) {
-    return res.json({ error: e.message, keyPresent: !!QUIVER_KEY, keyFirst6: (QUIVER_KEY||'').slice(0,6) });
+  // Temporary debug endpoint
+  if (req.query.debug) {
+    try {
+      const r = await fetch('https://api.quiverquant.com/beta/historical/congresstrading/AAPL', {
+        headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+      });
+      return res.json({ status: r.status, keyPresent: !!QUIVER_KEY, keyFirst6: (QUIVER_KEY||'').slice(0,6) });
+    } catch(e) {
+      return res.json({ error: e.message, keyPresent: !!QUIVER_KEY, keyFirst6: (QUIVER_KEY||'').slice(0,6) });
+    }
   }
-}
 
   // Per-ticker lookup — always fresh from API
   if (ticker) {
@@ -85,40 +86,55 @@ if (req.query.debug) {
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
 async function fetchAllTickers() {
-  const CUTOFF = new Date();
-  CUTOFF.setDate(CUTOFF.getDate() - 90);
+  const BATCH_SIZE = 10;  // fetch all 20 in 2 batches
+  const DELAY_MS   = 100; // minimal delay between batches
+  const CUTOFF     = new Date();
+  CUTOFF.setDate(CUTOFF.getDate() - 90); // last 90 days only
 
-  const seen = new Set();
   const allTrades = [];
+  const seen = new Set();
 
-  const results = await Promise.allSettled(
-    WATCH_TICKERS.map(t => fetchTicker(t))
-  );
+  for (let i = 0; i < WATCH_TICKERS.length; i += BATCH_SIZE) {
+    const batch = WATCH_TICKERS.slice(i, i + BATCH_SIZE);
 
-  for (const result of results) {
-    if (result.status !== 'fulfilled') continue;
-    for (const trade of result.value) {
-      if (seen.has(trade.id)) continue;
-      if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
-      seen.add(trade.id);
-      allTrades.push(trade);
+    const results = await Promise.allSettled(
+      batch.map(t => fetchTicker(t))
+    );
+
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      for (const trade of result.value) {
+        // Dedupe by id
+        if (seen.has(trade.id)) continue;
+        // Filter to last 90 days
+        if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
+        seen.add(trade.id);
+        allTrades.push(trade);
+      }
+    }
+
+    // Delay between batches
+    if (i + BATCH_SIZE < WATCH_TICKERS.length) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
     }
   }
 
+  // Sort by trade date descending
   return allTrades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
 }
 
 async function fetchTicker(ticker) {
-  const url = `https://api.quiverquant.com/beta/historical/congresstrading/${encodeURIComponent(ticker)}`;
-  console.log('[congress] fetching direct:', ticker);
-  const r = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${QUIVER_KEY}`,
-      Accept: 'application/json',
-      'User-Agent': 'Mozilla/5.0',
-    },
-  });
-  if (!r.ok) throw new Error(`QuiverQuant ${r.status} for ${ticker}`);
+  const proxyUrl = 'https://raspy-wood-5ad3.sadr57.workers.dev';
+  const url = `${proxyUrl}/?ticker=${encodeURIComponent(ticker)}`;
+  console.log('[congress] fetching:', url);
+  let r;
+  try {
+    r = await fetch(url);
+  } catch(e) {
+    throw new Error(`Proxy fetch threw for ${ticker}: ${e.message}`);
+  }
+  console.log('[congress] proxy status for', ticker, ':', r.status);
+  if (!r.ok) throw new Error(`Proxy ${r.status} for ${ticker}: ${await r.text().then(t=>t.slice(0,100))}`);
   const raw = await r.json();
   return (Array.isArray(raw) ? raw : [])
     .map(t => normalizeQuiver(t, ticker))

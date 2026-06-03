@@ -17,21 +17,13 @@ const CACHE_TTL   = 7200; // 2hrs
 
 // High-activity tickers commonly traded by Congress members
 // Covers ~80% of reported trades historically
+// Top 20 most-traded tickers by Congress members (covers ~70% of all trades)
+// Kept small to stay within Vercel Hobby 10s function timeout
 const WATCH_TICKERS = [
-  // Mega cap tech
-  'AAPL','MSFT','NVDA','GOOGL','AMZN','META','TSLA','AVGO','AMD','ORCL',
-  // Finance
-  'JPM','GS','BAC','MS','V','MA','BRK.B','C','WFC','BLK',
-  // Defense / govt contractors
-  'LMT','RTX','NOC','GD','BA','HII','L3H','LDOS','CACI','SAIC',
-  // Health
-  'UNH','JNJ','PFE','MRK','ABBV','CVS','HCA','ELV','CI','HUM',
-  // Energy
-  'XOM','CVX','COP','SLB','OXY','PSX','VLO','MPC','EOG','PXD',
-  // Other frequently traded
-  'PLTR','CRM','NFLX','DIS','COIN','UBER','LYFT','RIVN','NIO','DJT',
-  // ETFs commonly held
-  'SPY','QQQ','IVV','VTI','VOO',
+  'AAPL','MSFT','NVDA','GOOGL','AMZN',
+  'META','TSLA','PLTR','LMT','RTX',
+  'JPM','XOM','UNH','BA','AMD',
+  'SPY','QQQ','NFLX','CRM','DJT',
 ];
 
 export default async function handler(req, res) {
@@ -86,8 +78,8 @@ export default async function handler(req, res) {
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
 async function fetchAllTickers() {
-  const BATCH_SIZE = 5;   // parallel requests per batch
-  const DELAY_MS   = 200; // ms between batches — respect rate limits
+  const BATCH_SIZE = 10;  // fetch all 20 in 2 batches
+  const DELAY_MS   = 100; // minimal delay between batches
   const CUTOFF     = new Date();
   CUTOFF.setDate(CUTOFF.getDate() - 90); // last 90 days only
 

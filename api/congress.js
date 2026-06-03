@@ -1,6 +1,6 @@
-// api/congress.js — Political trades via QuiverQuant
-// Uses /live/congresstrading bulk endpoint (Hobbyist plan)
-// Falls back to /recent/housetrading + /recent/senatetrading if live endpoint fails
+// api/congress.js — Political trades via QuiverQuant (Hobbyist plan)
+// Hobbyist plan supports /historical/congresstrading/{TICKER} but not bulk feed
+// Strategy: scan a list of high-activity tickers in parallel, merge + dedupe results
 // Redis cache: 2hr TTL
 
 import { Redis } from '@upstash/redis';
@@ -15,6 +15,25 @@ const QUIVER_BASE = 'https://api.quiverquant.com/beta';
 const CACHE_KEY   = 'congress:feed:latest';
 const CACHE_TTL   = 7200; // 2hrs
 
+// High-activity tickers commonly traded by Congress members
+// Covers ~80% of reported trades historically
+const WATCH_TICKERS = [
+  // Mega cap tech
+  'AAPL','MSFT','NVDA','GOOGL','AMZN','META','TSLA','AVGO','AMD','ORCL',
+  // Finance
+  'JPM','GS','BAC','MS','V','MA','BRK.B','C','WFC','BLK',
+  // Defense / govt contractors
+  'LMT','RTX','NOC','GD','BA','HII','L3H','LDOS','CACI','SAIC',
+  // Health
+  'UNH','JNJ','PFE','MRK','ABBV','CVS','HCA','ELV','CI','HUM',
+  // Energy
+  'XOM','CVX','COP','SLB','OXY','PSX','VLO','MPC','EOG','PXD',
+  // Other frequently traded
+  'PLTR','CRM','NFLX','DIS','COIN','UBER','LYFT','RIVN','NIO','DJT',
+  // ETFs commonly held
+  'SPY','QQQ','IVV','VTI','VOO',
+];
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -23,7 +42,7 @@ export default async function handler(req, res) {
 
   const { ticker, bust } = req.query;
 
-  // Per-ticker lookup
+  // Per-ticker lookup — always fresh from API
   if (ticker) {
     if (!QUIVER_KEY) return res.json({ ok: true, trades: getMockTrades(ticker), source: 'mock' });
     try {
@@ -34,7 +53,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Full feed
+  // Full feed — serve from cache
   try {
     if (!bust) {
       const cached = await redis.get(CACHE_KEY);
@@ -49,7 +68,8 @@ export default async function handler(req, res) {
       return res.json({ ok: true, trades: getMockTrades(), source: 'mock', error: 'QUIVER_API_KEY not set' });
     }
 
-    const trades = await fetchLiveFeed();
+    // Fetch all tickers in parallel — batch to avoid rate limits
+    const trades = await fetchAllTickers();
 
     await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });
     await redis.set('congress:feed:lastUpdated', new Date().toISOString(), { ex: CACHE_TTL });
@@ -65,51 +85,42 @@ export default async function handler(req, res) {
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
-async function fetchLiveFeed() {
-  // Try live bulk endpoint first
-  try {
-    const r = await fetch(`${QUIVER_BASE}/live/congresstrading`, {
-      headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json' },
-    });
-    console.log('[congress] live endpoint status:', r.status);
-    if (r.ok) {
-      const raw = await r.json();
-      const trades = (Array.isArray(raw) ? raw : []).map(t => normalizeQuiver(t)).filter(Boolean);
-      if (trades.length > 0) {
-        console.log('[congress] live endpoint returned', trades.length, 'trades');
-        return trades;
+async function fetchAllTickers() {
+  const BATCH_SIZE = 5;   // parallel requests per batch
+  const DELAY_MS   = 200; // ms between batches — respect rate limits
+  const CUTOFF     = new Date();
+  CUTOFF.setDate(CUTOFF.getDate() - 90); // last 90 days only
+
+  const allTrades = [];
+  const seen = new Set();
+
+  for (let i = 0; i < WATCH_TICKERS.length; i += BATCH_SIZE) {
+    const batch = WATCH_TICKERS.slice(i, i + BATCH_SIZE);
+
+    const results = await Promise.allSettled(
+      batch.map(t => fetchTicker(t))
+    );
+
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      for (const trade of result.value) {
+        // Dedupe by id
+        if (seen.has(trade.id)) continue;
+        // Filter to last 90 days
+        if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
+        seen.add(trade.id);
+        allTrades.push(trade);
       }
-    } else {
-      const txt = await r.text();
-      console.log('[congress] live endpoint error:', r.status, txt.slice(0, 100));
     }
-  } catch (e) {
-    console.log('[congress] live endpoint threw:', e.message);
+
+    // Delay between batches
+    if (i + BATCH_SIZE < WATCH_TICKERS.length) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
   }
 
-  // Fallback: recent house + senate in parallel
-  console.log('[congress] falling back to recent house+senate endpoints');
-  const [houseRes, senateRes] = await Promise.allSettled([
-    fetch(`${QUIVER_BASE}/recent/housetrading`, {
-      headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json' },
-    }).then(r => r.json()),
-    fetch(`${QUIVER_BASE}/recent/senatetrading`, {
-      headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json' },
-    }).then(r => r.json()),
-  ]);
-
-  const house  = houseRes.status  === 'fulfilled' ? (Array.isArray(houseRes.value)  ? houseRes.value  : []) : [];
-  const senate = senateRes.status === 'fulfilled' ? (Array.isArray(senateRes.value) ? senateRes.value : []) : [];
-
-  console.log('[congress] house:', house.length, 'senate:', senate.length);
-
-  const merged = [
-    ...house.map(t  => normalizeQuiver(t, null, 'House')),
-    ...senate.map(t => normalizeQuiver(t, null, 'Senate')),
-  ].filter(Boolean).sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
-
-  if (merged.length > 0) return merged;
-  throw new Error('All QuiverQuant endpoints returned no data');
+  // Sort by trade date descending
+  return allTrades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
 }
 
 async function fetchTicker(ticker) {
@@ -119,14 +130,16 @@ async function fetchTicker(ticker) {
   });
   if (!r.ok) throw new Error(`QuiverQuant ${r.status} for ${ticker}`);
   const raw = await r.json();
-  return (Array.isArray(raw) ? raw : []).map(t => normalizeQuiver(t, ticker)).filter(Boolean);
+  return (Array.isArray(raw) ? raw : [])
+    .map(t => normalizeQuiver(t, ticker))
+    .filter(Boolean);
 }
 
 // ─── Normalize QuiverQuant response ──────────────────────────────────────────
-// Confirmed live fields: Representative, BioGuideID, ReportDate,
+// Confirmed fields from live API: Representative, BioGuideID, ReportDate,
 // TransactionDate, Ticker, Transaction, Range, House, Party, Amount
 
-function normalizeQuiver(t, tickerFallback, chamberOverride) {
+function normalizeQuiver(t, tickerFallback) {
   if (!t) return null;
 
   const tradeDate  = t.TransactionDate || t.Date || '';
@@ -135,31 +148,31 @@ function normalizeQuiver(t, tickerFallback, chamberOverride) {
     ? Math.round((new Date(reportDate) - new Date(tradeDate)) / 86400000)
     : null;
 
-  const tx     = (t.Transaction || '').toLowerCase();
+  const tx = (t.Transaction || '').toLowerCase();
   const ticker = (t.Ticker || tickerFallback || '').toUpperCase();
 
   return {
     id:             `${t.Representative}-${ticker}-${tradeDate}-${tx}`,
     representative: t.Representative || 'Unknown',
-    ticker:         ticker || '—',
+    ticker,
     transaction:    tx.includes('purchase') || tx.includes('buy')  ? 'Buy'
                   : tx.includes('sale')     || tx.includes('sell') ? 'Sell'
                   : t.Transaction || 'Unknown',
     range:          t.Range || '—',
     amount:         parseFloat(t.Amount) || 0,
-    chamber:        chamberOverride || normalizeChamber(t.House || ''),
+    chamber:        normalizeChamber(t.House || ''),
     party:          normalizeParty(t.Party || ''),
     tradeDate,
     reportDate,
     reportingGap:   gap,
-    lateFlag:       gap !== null && gap > 45,
+    lateFlag:       gap !== null && gap > 45,  // STOCK Act: 45 days
     tickerType:     'Stock',
     assetName:      '',
     price:          'N/A',
     owner:          'Self',
-    excessReturn:   t.ExcessReturn || null,
-    priceChange:    t.PriceChange  || null,
-    bioGuideId:     t.BioGuideID   || '',
+    excessReturn:   t.ExcessReturn  || null,
+    priceChange:    t.PriceChange   || null,
+    bioGuideId:     t.BioGuideID    || '',
   };
 }
 

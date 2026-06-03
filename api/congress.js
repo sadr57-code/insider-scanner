@@ -1,3 +1,4 @@
+// updated: 2026-06-03 16:34:07
 // api/congress.js -- Political trades via QuiverQuant (Hobbyist plan)
 // Hobbyist plan supports /historical/congresstrading/{TICKER} but not bulk feed
 // Strategy: fetch all tickers in parallel directly from QuiverQuant

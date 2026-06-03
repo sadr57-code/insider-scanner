@@ -116,11 +116,10 @@ async function fetchAllTickers() {
 }
 
 async function fetchTicker(ticker) {
-  const url = `${QUIVER_BASE}/historical/congresstrading/${encodeURIComponent(ticker)}`;
-  const r = await fetch(url, {
-    headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json' },
-  });
-  if (!r.ok) throw new Error(`QuiverQuant ${r.status} for ${ticker}`);
+  const proxyUrl = 'https://raspy-wood-5ad3.sadr57.workers.dev';
+  const url = `${proxyUrl}/?ticker=${encodeURIComponent(ticker)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Proxy ${r.status} for ${ticker}`);
   const raw = await r.json();
   return (Array.isArray(raw) ? raw : [])
     .map(t => normalizeQuiver(t, ticker))

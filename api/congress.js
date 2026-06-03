@@ -1,7 +1,5 @@
-// updated: 2026-06-03 16:34:07
 // api/congress.js -- Political trades via QuiverQuant (Hobbyist plan)
-// Hobbyist plan supports /historical/congresstrading/{TICKER} but not bulk feed
-// Strategy: fetch all tickers in parallel directly from QuiverQuant
+// Uses bulk endpoint: /beta/bulk/congress/politicians
 // Redis cache: 2hr TTL
 
 import { Redis } from '@upstash/redis';
@@ -15,11 +13,6 @@ const QUIVER_KEY = process.env.QUIVER_API_KEY;
 const CACHE_KEY  = 'congress:feed:latest';
 const CACHE_TTL  = 7200; // 2hrs
 
-const WATCH_TICKERS = [
-  'AAPL','MSFT','NVDA','GOOGL','AMZN',
-  'META','TSLA','PLTR',
-];
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -31,7 +24,7 @@ export default async function handler(req, res) {
   // Debug endpoint
   if (req.query.debug) {
     try {
-      const r = await fetch('https://api.quiverquant.com/beta/historical/congresstrading/AAPL', {
+      const r = await fetch('https://api.quiverquant.com/beta/bulk/congress/politicians', {
         headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
       });
       return res.json({ status: r.status, keyPresent: !!QUIVER_KEY, keyFirst6: (QUIVER_KEY||'').slice(0,6) });
@@ -61,7 +54,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const trades = await fetchAllTickers();
+    const trades = await fetchBulk();
 
     await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });
     await redis.set('congress:feed:lastUpdated', new Date().toISOString(), { ex: CACHE_TTL });
@@ -75,34 +68,42 @@ export default async function handler(req, res) {
   }
 }
 
-async function fetchAllTickers() {
+// Single bulk call -- returns all recent trades
+async function fetchBulk() {
+  const url = 'https://api.quiverquant.com/beta/bulk/congress/politicians';
+  console.log('[congress] bulk fetch:', url);
+  const r = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${QUIVER_KEY}`,
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0',
+    },
+  });
+  console.log('[congress] bulk status:', r.status);
+  if (!r.ok) throw new Error(`QuiverQuant bulk ${r.status}`);
+  const raw = await r.json();
+
   const CUTOFF = new Date();
   CUTOFF.setDate(CUTOFF.getDate() - 90);
-
   const seen = new Set();
-  const allTrades = [];
+  const trades = [];
 
-  const resultList = [];
-  for (const t of WATCH_TICKERS) {
-    resultList.push(await fetchTicker(t).then(v => ({status:'fulfilled',value:v})).catch(e => ({status:'rejected',reason:e})));
+  for (const t of (Array.isArray(raw) ? raw : [])) {
+    const trade = normalizeQuiver(t, t.Ticker || '');
+    if (!trade) continue;
+    if (seen.has(trade.id)) continue;
+    if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
+    seen.add(trade.id);
+    trades.push(trade);
   }
 
-  for (const result of resultList) {
-    if (result.status !== 'fulfilled') continue;
-    for (const trade of result.value) {
-      if (seen.has(trade.id)) continue;
-      if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
-      seen.add(trade.id);
-      allTrades.push(trade);
-    }
-  }
-
-  return allTrades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
+  return trades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
 }
 
+// Per-ticker fetch
 async function fetchTicker(ticker) {
   const url = `https://api.quiverquant.com/beta/historical/congresstrading/${encodeURIComponent(ticker)}`;
-  console.log('[congress] fetching direct:', ticker);
+  console.log('[congress] ticker fetch:', ticker);
   const r = await fetch(url, {
     headers: {
       Authorization: `Bearer ${QUIVER_KEY}`,

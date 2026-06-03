@@ -1,6 +1,6 @@
-// api/congress.js — Political trades via QuiverQuant (Hobbyist plan)
+// api/congress.js -- Political trades via QuiverQuant (Hobbyist plan)
 // Hobbyist plan supports /historical/congresstrading/{TICKER} but not bulk feed
-// Strategy: scan a list of high-activity tickers in parallel, merge + dedupe results
+// Strategy: fetch all tickers in parallel directly from QuiverQuant
 // Redis cache: 2hr TTL
 
 import { Redis } from '@upstash/redis';
@@ -10,15 +10,10 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-const QUIVER_KEY  = process.env.QUIVER_API_KEY;
-const QUIVER_BASE = 'https://api.quiverquant.com/beta';
-const CACHE_KEY   = 'congress:feed:latest';
-const CACHE_TTL   = 7200; // 2hrs
+const QUIVER_KEY = process.env.QUIVER_API_KEY;
+const CACHE_KEY  = 'congress:feed:latest';
+const CACHE_TTL  = 7200; // 2hrs
 
-// High-activity tickers commonly traded by Congress members
-// Covers ~80% of reported trades historically
-// Top 20 most-traded tickers by Congress members (covers ~70% of all trades)
-// Kept small to stay within Vercel Hobby 10s function timeout
 const WATCH_TICKERS = [
   'AAPL','MSFT','NVDA','GOOGL','AMZN',
   'META','TSLA','PLTR','LMT','RTX',
@@ -34,7 +29,7 @@ export default async function handler(req, res) {
 
   const { ticker, bust } = req.query;
 
-  // Temporary debug endpoint
+  // Debug endpoint
   if (req.query.debug) {
     try {
       const r = await fetch('https://api.quiverquant.com/beta/historical/congresstrading/AAPL', {
@@ -46,9 +41,8 @@ export default async function handler(req, res) {
     }
   }
 
-  // Per-ticker lookup — always fresh from API
+  // Per-ticker lookup
   if (ticker) {
-    // proxy handles auth — no key check needed
     try {
       const trades = await fetchTicker(ticker.toUpperCase());
       return res.json({ ok: true, trades, source: 'quiver' });
@@ -57,7 +51,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Full feed — serve from cache
+  // Full feed -- serve from cache
   try {
     if (!bust) {
       const cached = await redis.get(CACHE_KEY);
@@ -68,7 +62,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fetch all tickers via Cloudflare proxy (no API key needed here)
     const trades = await fetchAllTickers();
 
     await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });
@@ -83,67 +76,46 @@ export default async function handler(req, res) {
   }
 }
 
-// ─── Fetch helpers ────────────────────────────────────────────────────────────
-
 async function fetchAllTickers() {
-  const BATCH_SIZE = 10;  // fetch all 20 in 2 batches
-  const DELAY_MS   = 100; // minimal delay between batches
-  const CUTOFF     = new Date();
-  CUTOFF.setDate(CUTOFF.getDate() - 90); // last 90 days only
+  const CUTOFF = new Date();
+  CUTOFF.setDate(CUTOFF.getDate() - 90);
 
-  const allTrades = [];
   const seen = new Set();
+  const allTrades = [];
 
-  for (let i = 0; i < WATCH_TICKERS.length; i += BATCH_SIZE) {
-    const batch = WATCH_TICKERS.slice(i, i + BATCH_SIZE);
+  const results = await Promise.allSettled(
+    WATCH_TICKERS.map(t => fetchTicker(t))
+  );
 
-    const results = await Promise.allSettled(
-      batch.map(t => fetchTicker(t))
-    );
-
-    for (const result of results) {
-      if (result.status !== 'fulfilled') continue;
-      for (const trade of result.value) {
-        // Dedupe by id
-        if (seen.has(trade.id)) continue;
-        // Filter to last 90 days
-        if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
-        seen.add(trade.id);
-        allTrades.push(trade);
-      }
-    }
-
-    // Delay between batches
-    if (i + BATCH_SIZE < WATCH_TICKERS.length) {
-      await new Promise(r => setTimeout(r, DELAY_MS));
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    for (const trade of result.value) {
+      if (seen.has(trade.id)) continue;
+      if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
+      seen.add(trade.id);
+      allTrades.push(trade);
     }
   }
 
-  // Sort by trade date descending
   return allTrades.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''));
 }
 
 async function fetchTicker(ticker) {
-  const proxyUrl = 'https://raspy-wood-5ad3.sadr57.workers.dev';
-  const url = `${proxyUrl}/?ticker=${encodeURIComponent(ticker)}`;
-  console.log('[congress] fetching:', url);
-  let r;
-  try {
-    r = await fetch(url);
-  } catch(e) {
-    throw new Error(`Proxy fetch threw for ${ticker}: ${e.message}`);
-  }
-  console.log('[congress] proxy status for', ticker, ':', r.status);
-  if (!r.ok) throw new Error(`Proxy ${r.status} for ${ticker}: ${await r.text().then(t=>t.slice(0,100))}`);
+  const url = `https://api.quiverquant.com/beta/historical/congresstrading/${encodeURIComponent(ticker)}`;
+  console.log('[congress] fetching direct:', ticker);
+  const r = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${QUIVER_KEY}`,
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0',
+    },
+  });
+  if (!r.ok) throw new Error(`QuiverQuant ${r.status} for ${ticker}`);
   const raw = await r.json();
   return (Array.isArray(raw) ? raw : [])
     .map(t => normalizeQuiver(t, ticker))
     .filter(Boolean);
 }
-
-// ─── Normalize QuiverQuant response ──────────────────────────────────────────
-// Confirmed fields from live API: Representative, BioGuideID, ReportDate,
-// TransactionDate, Ticker, Transaction, Range, House, Party, Amount
 
 function normalizeQuiver(t, tickerFallback) {
   if (!t) return null;
@@ -164,16 +136,16 @@ function normalizeQuiver(t, tickerFallback) {
     transaction:    tx.includes('purchase') || tx.includes('buy')  ? 'Buy'
                   : tx.includes('sale')     || tx.includes('sell') ? 'Sell'
                   : t.Transaction || 'Unknown',
-    range:          t.Range || '—',
+    range:          t.Range || '--',
     amount:         parseFloat(t.Amount) || 0,
     chamber:        normalizeChamber(t.House || ''),
     party:          normalizeParty(t.Party || ''),
     tradeDate,
     reportDate,
     reportingGap:   gap,
-    lateFlag:       gap !== null && gap > 45,  // STOCK Act: 45 days
-    tickerType:     'Stock',
-    assetName:      '',
+    lateFlag:       gap !== null && gap > 45,
+    tickerType:     t.TickerType || 'Stock',
+    assetName:      t.Description || '',
     price:          'N/A',
     owner:          'Self',
     excessReturn:   t.ExcessReturn  || null,
@@ -199,23 +171,22 @@ function normalizeParty(raw) {
   return (raw[0] || '?').toUpperCase();
 }
 
-// ─── Mock data fallback ───────────────────────────────────────────────────────
-
 function getMockTrades(tickerFilter) {
   const today = new Date();
   const ago = n => { const d = new Date(today); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); };
   const all = [
-    { id:'1',  representative:'Nancy Pelosi',     ticker:'NVDA', transaction:'Buy',  range:'$500,001 - $1,000,000', amount:500001, chamber:'House',  party:'D', tradeDate:ago(3),  reportDate:ago(1),  reportingGap:2,  lateFlag:false, excessReturn:'+12.4%', priceChange:'+18.2%' },
-    { id:'2',  representative:'Dan Crenshaw',      ticker:'AAPL', transaction:'Buy',  range:'$15,001 - $50,000',     amount:15001,  chamber:'House',  party:'R', tradeDate:ago(5),  reportDate:ago(2),  reportingGap:3,  lateFlag:false, excessReturn:'+3.1%',  priceChange:'+5.8%'  },
-    { id:'3',  representative:'Tommy Tuberville',  ticker:'LMT',  transaction:'Buy',  range:'$50,001 - $100,000',    amount:50001,  chamber:'Senate', party:'R', tradeDate:ago(7),  reportDate:ago(6),  reportingGap:1,  lateFlag:false, excessReturn:'+6.7%',  priceChange:'+9.1%'  },
-    { id:'4',  representative:'Ro Khanna',         ticker:'TSLA', transaction:'Sell', range:'$100,001 - $250,000',   amount:100001, chamber:'House',  party:'D', tradeDate:ago(10), reportDate:ago(4),  reportingGap:6,  lateFlag:false, excessReturn:'-2.1%',  priceChange:'+1.4%'  },
-    { id:'5',  representative:'Mark Kelly',        ticker:'AMZN', transaction:'Buy',  range:'$1,001 - $15,000',      amount:1001,   chamber:'Senate', party:'D', tradeDate:ago(12), reportDate:ago(10), reportingGap:2,  lateFlag:false, excessReturn:'+8.9%',  priceChange:'+11.2%' },
-    { id:'6',  representative:'Michael McCaul',    ticker:'PLTR', transaction:'Buy',  range:'$500,001 - $1,000,000', amount:500001, chamber:'House',  party:'R', tradeDate:ago(4),  reportDate:ago(3),  reportingGap:1,  lateFlag:false, excessReturn:'+22.1%', priceChange:'+27.4%' },
-    { id:'7',  representative:'Josh Gottheimer',   ticker:'MSFT', transaction:'Buy',  range:'$250,001 - $500,000',   amount:250001, chamber:'House',  party:'D', tradeDate:ago(18), reportDate:ago(15), reportingGap:3,  lateFlag:false, excessReturn:'+4.2%',  priceChange:'+6.9%'  },
-    { id:'8',  representative:'Adam Schiff',       ticker:'CRM',  transaction:'Buy',  range:'$15,001 - $50,000',     amount:15001,  chamber:'Senate', party:'D', tradeDate:ago(6),  reportDate:ago(4),  reportingGap:2,  lateFlag:false, excessReturn:'+9.4%',  priceChange:'+12.1%' },
-    { id:'9',  representative:'Shelley Capito',    ticker:'XOM',  transaction:'Buy',  range:'$15,001 - $50,000',     amount:15001,  chamber:'Senate', party:'R', tradeDate:ago(32), reportDate:ago(1),  reportingGap:31, lateFlag:false, excessReturn:'+2.3%',  priceChange:'+4.1%'  },
-    { id:'10', representative:'David Rouzer',      ticker:'BA',   transaction:'Buy',  range:'$100,001 - $250,000',   amount:100001, chamber:'House',  party:'R', tradeDate:ago(35), reportDate:ago(2),  reportingGap:33, lateFlag:false, excessReturn:'+11.2%', priceChange:'+14.8%' },
+    { id:'1',  representative:'Nancy Pelosi',    ticker:'NVDA', transaction:'Buy',  range:'$500,001 - $1,000,000', amount:500001, chamber:'House',  party:'D', tradeDate:ago(3),  reportDate:ago(1),  reportingGap:2,  lateFlag:false, excessReturn:'+12.4%', priceChange:'+18.2%' },
+    { id:'2',  representative:'Dan Crenshaw',     ticker:'AAPL', transaction:'Buy',  range:'$15,001 - $50,000',     amount:15001,  chamber:'House',  party:'R', tradeDate:ago(5),  reportDate:ago(2),  reportingGap:3,  lateFlag:false, excessReturn:'+3.1%',  priceChange:'+5.8%'  },
+    { id:'3',  representative:'Tommy Tuberville', ticker:'LMT',  transaction:'Buy',  range:'$50,001 - $100,000',    amount:50001,  chamber:'Senate', party:'R', tradeDate:ago(7),  reportDate:ago(6),  reportingGap:1,  lateFlag:false, excessReturn:'+6.7%',  priceChange:'+9.1%'  },
+    { id:'4',  representative:'Ro Khanna',        ticker:'TSLA', transaction:'Sell', range:'$100,001 - $250,000',   amount:100001, chamber:'House',  party:'D', tradeDate:ago(10), reportDate:ago(4),  reportingGap:6,  lateFlag:false, excessReturn:'-2.1%',  priceChange:'+1.4%'  },
+    { id:'5',  representative:'Mark Kelly',       ticker:'AMZN', transaction:'Buy',  range:'$1,001 - $15,000',      amount:1001,   chamber:'Senate', party:'D', tradeDate:ago(12), reportDate:ago(10), reportingGap:2,  lateFlag:false, excessReturn:'+8.9%',  priceChange:'+11.2%' },
+    { id:'6',  representative:'Michael McCaul',   ticker:'PLTR', transaction:'Buy',  range:'$500,001 - $1,000,000', amount:500001, chamber:'House',  party:'R', tradeDate:ago(4),  reportDate:ago(3),  reportingGap:1,  lateFlag:false, excessReturn:'+22.1%', priceChange:'+27.4%' },
+    { id:'7',  representative:'Josh Gottheimer',  ticker:'MSFT', transaction:'Buy',  range:'$250,001 - $500,000',   amount:250001, chamber:'House',  party:'D', tradeDate:ago(18), reportDate:ago(15), reportingGap:3,  lateFlag:false, excessReturn:'+4.2%',  priceChange:'+6.9%'  },
+    { id:'8',  representative:'Adam Schiff',      ticker:'CRM',  transaction:'Buy',  range:'$15,001 - $50,000',     amount:15001,  chamber:'Senate', party:'D', tradeDate:ago(6),  reportDate:ago(4),  reportingGap:2,  lateFlag:false, excessReturn:'+9.4%',  priceChange:'+12.1%' },
+    { id:'9',  representative:'Shelley Capito',   ticker:'XOM',  transaction:'Buy',  range:'$15,001 - $50,000',     amount:15001,  chamber:'Senate', party:'R', tradeDate:ago(32), reportDate:ago(1),  reportingGap:31, lateFlag:false, excessReturn:'+2.3%',  priceChange:'+4.1%'  },
+    { id:'10', representative:'David Rouzer',     ticker:'BA',   transaction:'Buy',  range:'$100,001 - $250,000',   amount:100001, chamber:'House',  party:'R', tradeDate:ago(35), reportDate:ago(2),  reportingGap:33, lateFlag:false, excessReturn:'+11.2%', priceChange:'+14.8%' },
   ];
   if (tickerFilter) return all.filter(t => t.ticker === tickerFilter.toUpperCase());
   return all;
 }
+

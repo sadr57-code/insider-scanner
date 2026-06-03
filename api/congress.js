@@ -16,9 +16,7 @@ const CACHE_TTL  = 7200; // 2hrs
 
 const WATCH_TICKERS = [
   'AAPL','MSFT','NVDA','GOOGL','AMZN',
-  'META','TSLA','PLTR','LMT','RTX',
-  'JPM','XOM','UNH','BA','AMD',
-  'SPY','QQQ','NFLX','CRM','DJT',
+  'META','TSLA','PLTR',
 ];
 
 export default async function handler(req, res) {

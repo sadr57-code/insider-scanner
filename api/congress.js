@@ -81,12 +81,12 @@ async function fetchAllTickers() {
   const seen = new Set();
   const allTrades = [];
 
-  const results = [];
+  const resultList = [];
   for (const t of WATCH_TICKERS) {
-    results.push(await fetchTicker(t).then(v => ({status:'fulfilled',value:v})).catch(e => ({status:'rejected',reason:e})));
+    resultList.push(await fetchTicker(t).then(v => ({status:'fulfilled',value:v})).catch(e => ({status:'rejected',reason:e})));
   }
 
-  for (const result of results) {
+  for (const result of resultList) {
     if (result.status !== 'fulfilled') continue;
     for (const trade of result.value) {
       if (seen.has(trade.id)) continue;

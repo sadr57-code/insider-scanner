@@ -34,6 +34,17 @@ export default async function handler(req, res) {
 
   const { ticker, bust } = req.query;
 
+if (req.query.debug) {
+  try {
+    const r = await fetch('https://api.quiverquant.com/beta/historical/congresstrading/AAPL', {
+      headers: { Authorization: `Bearer ${QUIVER_KEY}`, Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+    });
+    return res.json({ status: r.status, keyPresent: !!QUIVER_KEY, keyFirst6: (QUIVER_KEY||'').slice(0,6) });
+  } catch(e) {
+    return res.json({ error: e.message, keyPresent: !!QUIVER_KEY, keyFirst6: (QUIVER_KEY||'').slice(0,6) });
+  }
+}
+
   // Per-ticker lookup — always fresh from API
   if (ticker) {
     // proxy handles auth — no key check needed

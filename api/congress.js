@@ -56,11 +56,16 @@ export default async function handler(req, res) {
 
     const trades = await fetchBulk();
 
-    await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });
-    await redis.set('congress:feed:lastUpdated', new Date().toISOString(), { ex: CACHE_TTL });
+    try {
+  try {
+  await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });
+  await redis.set('congress:feed:lastUpdated', new Date().toISOString(), { ex: CACHE_TTL });
+} catch (cacheErr) {
+  console.error('[congress] Redis cache write failed:', cacheErr.message);
+}
 
-    res.setHeader('X-Cache', bust ? 'BUSTED' : 'MISS');
-    return res.json({ ok: true, trades, source: 'quiver', count: trades.length });
+res.setHeader('X-Cache', bust ? 'BUSTED' : 'MISS');
+return res.json({ ok: true, trades, source: 'quiver', count: trades.length });
 
   } catch (err) {
     console.error('[congress] ERROR:', err.message);

@@ -190,8 +190,8 @@ function normalizeHistorical(t, tickerFallback) {
     assetName:      t.Description || '',
     price:          'N/A',
     owner:          'Self',
-    excessReturn:   t.ExcessReturn || null,
-    priceChange:    t.PriceChange  || null,
+    excessReturn:   t.ExcessReturn != null ? `${t.ExcessReturn >= 0 ? '+' : ''}${parseFloat(t.ExcessReturn).toFixed(1)}%` : null,
+priceChange:    t.PriceChange  != null ? `${t.PriceChange  >= 0 ? '+' : ''}${parseFloat(t.PriceChange).toFixed(1)}%`  : null,
     bioGuideId:     t.BioGuideID   || '',
   };
 }

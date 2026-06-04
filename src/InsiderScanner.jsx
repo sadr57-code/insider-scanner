@@ -71,6 +71,14 @@ function MetricCard({ label, value, sub }) {
 }
 
 
+const FEED_TICKERS = new Set([
+  'AAPL','MSFT','NVDA','AMZN','TSLA',
+  'GOOGL','META','PLTR','AMD','CRM',
+  'LMT','BA','RTX','XOM','CVX',
+  'JPM','GS','PFE','UNH','COIN'
+]);
+
+
 // ── CongressTab ──────────────────────────────────────────────────────────────
 function CongressTab() {
   const [trades,    setTrades]   = useState([]);
@@ -216,8 +224,22 @@ function CongressTab() {
         </label>
 
         {/* Ticker search */}
-        <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
-          placeholder="Ticker..." style={{ ...selStyle, width:80, textTransform:'uppercase' }} />
+        <input value={ticker} 
+  onChange={e => setTicker(e.target.value.toUpperCase())}
+  onBlur={e => {
+    const sym = e.target.value.toUpperCase().trim();
+    if (sym && !FEED_TICKERS.has(sym)) {
+      setLoading(true);
+      fetch(`/api/congress?ticker=${sym}`)
+        .then(r => r.json())
+        .then(data => { if (data.ok) setTrades(data.trades || []); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    } else if (!sym) {
+      fetchTrades();
+    }
+  }}
+  placeholder="Ticker..." style={{ ...selStyle, width:80, textTransform:'uppercase' }} />
 
         {/* Rep search */}
         <input value={search} onChange={e => setSearch(e.target.value)}

@@ -335,10 +335,10 @@ function CongressTab() {
                     <td style={{ padding:'9px 10px', fontWeight:500, color: t.amount>=500000 ? '#92400e' : t.amount>=100000 ? '#4c1d95' : '#374151' }}>
                       {t.range || '—'}
                     </td>
-                    <td style={{ padding:'9px 10px', fontWeight:500, color: t.excessReturn?.startsWith('-') ? '#dc2626' : '#065f46' }}>
+                    <td style={{ padding:'9px 10px', fontWeight:500, color: String(t.excessReturn||'').startsWith('-') ? '#dc2626' : '#065f46' }}>
                       {t.excessReturn || '—'}
                     </td>
-                    <td style={{ padding:'9px 10px', color: t.priceChange?.startsWith('-') ? '#dc2626' : '#065f46' }}>
+                    <td style={{ padding:'9px 10px', color: String(t.priceChange||'').startsWith('-') ? '#dc2626' : '#065f46' }}>
                       {t.priceChange || '—'}
                     </td>
                     <td style={{ padding:'9px 10px', color:'#9ca3af', textAlign:'center' }}>

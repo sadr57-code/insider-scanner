@@ -55,9 +55,7 @@ export default async function handler(req, res) {
     }
 
     const trades = await fetchBulk();
-
     try {
-  try {
   await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });
   await redis.set('congress:feed:lastUpdated', new Date().toISOString(), { ex: CACHE_TTL });
 } catch (cacheErr) {

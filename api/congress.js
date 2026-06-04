@@ -73,10 +73,7 @@ async function fetchBulk() {
   const PROXY = process.env.QUIVER_PROXY_URL;
   if (!PROXY) throw new Error('QUIVER_PROXY_URL not set');
 
-  const TICKERS = [
-    'AAPL','MSFT','NVDA','AMZN','TSLA','GOOGL','META','PLTR','AMD','CRM',
-    'LMT','BA','XOM','JPM','GS','UNH','AVGO','NOW','PANW','SNOW'
-  ];
+  const TICKERS = ['AAPL','MSFT','NVDA'];
 
   console.log('[congress] single worker call →', PROXY);
   const r = await fetch(`${PROXY}?tickers=${TICKERS.join(',')}`);

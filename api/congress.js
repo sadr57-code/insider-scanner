@@ -78,7 +78,9 @@ async function fetchBulk() {
 
   const TICKERS = [
   'AAPL','MSFT','NVDA','AMZN','TSLA',
-  'GOOGL','META','PLTR','AMD','CRM'
+  'GOOGL','META','PLTR','AMD','CRM',
+  'LMT','BA','RTX','XOM','CVX',
+  'JPM','GS','PFE','UNH','COIN'
 ];
 
   console.log('[congress] single worker call →', PROXY);

@@ -70,59 +70,58 @@ export default async function handler(req, res) {
 
 // Bulk fetch -- pages 1-3 (up to 150 trades), filtered to last 90 days
 async function fetchBulk() {
+  const PROXY = process.env.QUIVER_PROXY_URL;
+  if (!PROXY) throw new Error('QUIVER_PROXY_URL not set');
+
+  const TICKERS = [
+    'AAPL','MSFT','NVDA','AMZN','TSLA','GOOGL','META','PLTR','AMD','CRM',
+    'LMT','BA','XOM','JPM','GS','UNH','AVGO','NOW','PANW','SNOW'
+  ];
+
+  console.log('[congress] single worker call →', PROXY);
+  const r = await fetch(`${PROXY}?tickers=${TICKERS.join(',')}`);
+  if (!r.ok) throw new Error(`Worker ${r.status}`);
+  const raw = await r.json();
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    console.log('[congress] worker returned empty → mock');
+    return getMockTrades();
+  }
+
   const CUTOFF = new Date();
   CUTOFF.setDate(CUTOFF.getDate() - 90);
 
   const seen = new Set();
   const trades = [];
 
-  for (let page = 1; page <= 3; page++) {
-    const url = `https://api.quiverquant.com/beta/bulk/congresstrading?page_size=50&page=${page}`;
-    console.log('[congress] fetching page', page);
-    const r = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${QUIVER_KEY}`,
-        Accept: 'application/json',
-        'User-Agent': 'Mozilla/5.0',
-      },
-    });
-    if (!r.ok) throw new Error(`QuiverQuant bulk ${r.status} page ${page}`);
-    const raw = await r.json();
-    if (!Array.isArray(raw) || raw.length === 0) break;
-
-    for (const t of raw) {
-      const trade = normalizeBulk(t);
-      if (!trade) continue;
-      if (seen.has(trade.id)) continue;
-      if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) break; // sorted desc, stop early
-      seen.add(trade.id);
-      trades.push(trade);
-    }
+  for (const t of raw) {
+    const trade = normalizeHistorical(t, t.Ticker);
+    if (!trade) continue;
+    if (seen.has(trade.id)) continue;
+    if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
+    seen.add(trade.id);
+    trades.push(trade);
   }
 
+  trades.sort((a, b) => new Date(b.tradeDate) - new Date(a.tradeDate));
   console.log('[congress] total trades:', trades.length);
   return trades;
 }
 
 // Per-ticker fetch (for ticker= param)
 async function fetchTicker(ticker) {
-  const url = `https://api.quiverquant.com/beta/historical/congresstrading/${encodeURIComponent(ticker)}`;
-  console.log('[congress] ticker fetch:', ticker);
-  const r = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${QUIVER_KEY}`,
-      Accept: 'application/json',
-      'User-Agent': 'Mozilla/5.0',
-    },
-  });
-  if (!r.ok) throw new Error(`QuiverQuant ${r.status} for ${ticker}`);
+  const PROXY = process.env.QUIVER_PROXY_URL;
+  if (!PROXY) throw new Error('QUIVER_PROXY_URL not set');
+
+  console.log('[congress] ticker fetch via worker:', ticker);
+  const r = await fetch(`${PROXY}?ticker=${encodeURIComponent(ticker.toUpperCase())}`);
+  if (!r.ok) throw new Error(`Worker ${r.status} for ${ticker}`);
   const raw = await r.json();
+
   return (Array.isArray(raw) ? raw : [])
     .map(t => normalizeHistorical(t, ticker))
     .filter(Boolean);
-}
-
-// Normalize bulk endpoint fields
+}// Normalize bulk endpoint fields
 // Fields: Name, Ticker, Traded, Filed, Transaction, Trade_Size_USD, Chamber, Party, BioGuideID, excess_return
 function normalizeBulk(t) {
   if (!t) return null;

@@ -76,7 +76,9 @@ async function fetchBulk() {
   const TICKERS = ['AAPL','MSFT','NVDA'];
 
   console.log('[congress] single worker call →', PROXY);
-  const r = await fetch(`${PROXY}?tickers=${TICKERS.join(',')}`);
+  console.log('[congress] PROXY value:', PROXY);
+const r = await fetch(`${PROXY}?tickers=${TICKERS.join(',')}`);
+console.log('[congress] worker response status:', r.status);
   if (!r.ok) throw new Error(`Worker ${r.status}`);
   const raw = await r.json();
 

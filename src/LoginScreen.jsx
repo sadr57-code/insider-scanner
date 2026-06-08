@@ -51,6 +51,11 @@ export default function LoginScreen({ onLogin }) {
           window.history.replaceState({}, '', window.location.pathname);
         }
         onLogin(userData);
+      } else if (d.error === 'Account expired' || d.error === 'Access code expired') {
+        // Route to pricing page instead of showing error
+        const userData = { name: body.username || body.email || 'User', role: 'expired', uid: null, expiresAt: 'expired' };
+        sessionStorage.setItem('insider_user', JSON.stringify(userData));
+        onLogin(userData);
       } else {
         setError(d.error || 'Login failed');
       }

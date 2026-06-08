@@ -10,6 +10,7 @@ import PricingPage from './PricingPage';
 
 function isExpired(expiresAt) {
   if (!expiresAt) return false; // no expiry = never expires
+  if (expiresAt === 'expired') return true; // explicitly expired
   return new Date(expiresAt) < new Date();
 }
 

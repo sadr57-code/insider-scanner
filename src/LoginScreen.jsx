@@ -25,7 +25,7 @@ export default function LoginScreen({ onLogin }) {
       // Auto-submit after state settles
       setTimeout(() => doLoginWith({ username: u, password: p }), 100);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function doLoginWith(body) {
     setLoading(true); setError('');

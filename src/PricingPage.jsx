@@ -208,7 +208,7 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
                   Want a free 30-day trial?
                 </div>
                 <div style={{ fontSize: 12, color: '#6b7280' }}>
-                  Contact your administrator to activate a trial account.
+                  Email <a href='mailto:support@itasinc.net' style={{color:'#059669'}}>support@itasinc.net</a> to activate a trial account.
                 </div>
               </div>
             ) : (

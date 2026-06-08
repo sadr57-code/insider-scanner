@@ -1,23 +1,31 @@
 // api/users.js — User management + admin auth via Upstash Redis
-// Mirrors the UOA Scanner users API pattern exactly.
+// Ported from UOA Scanner. Uses username-based auth + shareable login links.
 //
 // Routes:
-//   POST   /api/users?action=login          — validate access code / credentials
+//   POST   /api/users?action=login          — username+password or access code login
+//   POST   /api/users?action=admin-login    — admin panel password auth
+//   POST   /api/users?action=admin-logout   — clear admin session
 //   GET    /api/users?action=list           — list all users (admin only)
 //   POST   /api/users?action=add            — add / update user (admin only)
 //   DELETE /api/users?action=delete&id=...  — remove user (admin only)
-//   POST   /api/users?action=admin-login    — admin password auth
+//   POST   /api/users?action=regenerate&id= — new access code (admin only)
 //   GET    /api/users?action=filters&uid=.. — load saved filters for user
 //   POST   /api/users?action=filters&uid=.. — save filters for user
 //
 // Env vars required:
 //   UPSTASH_REDIS_REST_URL
 //   UPSTASH_REDIS_REST_TOKEN
-//   ADMIN_PASSWORD   (fallback: "Admin2024!")
+//   ADMIN_PASSWORD   — admin panel login password
+//   OWNER_USER       — owner username (e.g. "admin")
+//   OWNER_PASSWORD   — owner password
+//   OWNER_EMAIL      — owner email (fallback login)
 
 const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-const ADMIN_PASS  = process.env.ADMIN_PASSWORD || 'Admin2024!';
+const ADMIN_PASS  = process.env.ADMIN_PASSWORD  || 'Admin2024!';
+const OWNER_USER  = process.env.OWNER_USER      || 'admin';
+const OWNER_PASS  = process.env.OWNER_PASSWORD  || 'Owner2024!';
+const OWNER_EMAIL = process.env.OWNER_EMAIL     || 'owner@example.com';
 const USERS_KEY   = 'insider:users';
 const FILTERS_KEY = (uid) => `insider:filters:${uid}`;
 
@@ -39,33 +47,27 @@ async function redisSet(key, value, ttlSeconds = null) {
       ? `${REDIS_URL}/set/${encodeURIComponent(key)}/${encoded}/EX/${ttlSeconds}`
       : `${REDIS_URL}/set/${encodeURIComponent(key)}/${encoded}`;
     await fetch(url, { headers: { Authorization: `Bearer ${REDIS_TOKEN}` } });
-  } catch { /* non-fatal */ }
+  } catch {}
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function generateAccessCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
 
-async function getUsers() {
-  return (await redisGet(USERS_KEY)) || [];
-}
+async function getUsers() { return (await redisGet(USERS_KEY)) || []; }
+async function saveUsers(users) { await redisSet(USERS_KEY, users); }
 
-async function saveUsers(users) {
-  await redisSet(USERS_KEY, users);
-}
-
-// Simple cookie helper for admin session (stateless JWT-lite using Redis)
 async function setAdminSession(res) {
   const token = generateAccessCode() + generateAccessCode();
-  await redisSet(`insider:admin:${token}`, { ts: Date.now() }, 3600); // 1hr
-  res.setHeader('Set-Cookie', `insider_admin=${token}; HttpOnly; SameSite=Strict; Max-Age=3600; Path=/`);
-  return token;
+  await redisSet(`insider:admin:${token}`, { ts: Date.now() }, 3600);
+  res.setHeader(
+    'Set-Cookie',
+    `insider_admin=${token}; HttpOnly; Secure; SameSite=None; Max-Age=3600; Path=/`
+  );
 }
 
 async function isAdminSession(req) {
@@ -76,6 +78,17 @@ async function isAdminSession(req) {
   return !!session;
 }
 
+async function parseBody(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string') { try { return JSON.parse(req.body); } catch { return {}; } }
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve({}); } });
+    req.on('error', () => resolve({}));
+  });
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -84,11 +97,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { action, id, uid } = req.query;
+  const body = await parseBody(req);
 
   // ── POST /api/users?action=admin-login ──────────────────────────────────────
   if (req.method === 'POST' && action === 'admin-login') {
-    const { password } = req.body || {};
-    if (password === ADMIN_PASS) {
+    const { password } = body;
+    if (password === ADMIN_PASS || password === OWNER_PASS) {
       await setAdminSession(res);
       return res.status(200).json({ ok: true });
     }
@@ -97,20 +111,41 @@ export default async function handler(req, res) {
 
   // ── POST /api/users?action=admin-logout ─────────────────────────────────────
   if (req.method === 'POST' && action === 'admin-logout') {
-    res.setHeader('Set-Cookie', 'insider_admin=; HttpOnly; Max-Age=0; Path=/');
+    res.setHeader(
+      'Set-Cookie',
+      'insider_admin=; HttpOnly; Secure; SameSite=None; Max-Age=0; Path=/'
+    );
     return res.status(200).json({ ok: true });
   }
 
   // ── POST /api/users?action=login ────────────────────────────────────────────
   if (req.method === 'POST' && action === 'login') {
-    const { code, email, password } = req.body || {};
+    const { username, password, code, email } = body;
     const users = await getUsers();
 
-    // Owner shortcut — check against env-defined owner creds
-    const ownerEmail = process.env.OWNER_EMAIL || 'owner@example.com';
-    const ownerPass  = process.env.OWNER_PASSWORD || 'Owner2024!';
-    if (email === ownerEmail && password === ownerPass) {
-      return res.status(200).json({ ok: true, role: 'owner', name: 'Owner', uid: 'owner' });
+    // Username + password login (primary pattern)
+    if (username && password) {
+      // Owner shortcut
+      if (
+        username.toLowerCase() === OWNER_USER.toLowerCase() &&
+        password === OWNER_PASS
+      ) {
+        await setAdminSession(res);
+        return res.status(200).json({ ok: true, role: 'owner', name: 'Owner', uid: 'owner' });
+      }
+      // Regular user
+      const user = users.find(u =>
+        (u.username?.toLowerCase() === username.toLowerCase() ||
+         u.name?.toLowerCase()     === username.toLowerCase() ||
+         u.email?.toLowerCase()    === username.toLowerCase()) &&
+        u.password === password &&
+        u.active !== false
+      );
+      if (!user) return res.status(401).json({ ok: false, error: 'Invalid username or password' });
+      if (user.expiresAt && new Date(user.expiresAt) < new Date()) {
+        return res.status(401).json({ ok: false, error: 'Account expired' });
+      }
+      return res.status(200).json({ ok: true, role: user.role || 'user', name: user.name, uid: user.id, expiresAt: user.expiresAt || null });
     }
 
     // Access code login
@@ -120,11 +155,15 @@ export default async function handler(req, res) {
       if (user.expiresAt && new Date(user.expiresAt) < new Date()) {
         return res.status(401).json({ ok: false, error: 'Access code expired' });
       }
-      return res.status(200).json({ ok: true, role: user.role || 'user', name: user.name, uid: user.id });
+      return res.status(200).json({ ok: true, role: user.role || 'user', name: user.name, uid: user.id, expiresAt: user.expiresAt || null });
     }
 
-    // Email + password login
+    // Email + password login (fallback / owner email)
     if (email && password) {
+      if (email.toLowerCase() === OWNER_EMAIL.toLowerCase() && password === OWNER_PASS) {
+        await setAdminSession(res);
+        return res.status(200).json({ ok: true, role: 'owner', name: 'Owner', uid: 'owner' });
+      }
       const user = users.find(u =>
         u.email?.toLowerCase() === email.toLowerCase() &&
         u.password === password &&
@@ -134,56 +173,51 @@ export default async function handler(req, res) {
       if (user.expiresAt && new Date(user.expiresAt) < new Date()) {
         return res.status(401).json({ ok: false, error: 'Account expired' });
       }
-      return res.status(200).json({ ok: true, role: user.role || 'user', name: user.name, uid: user.id });
+      return res.status(200).json({ ok: true, role: user.role || 'user', name: user.name, uid: user.id, expiresAt: user.expiresAt || null });
     }
 
-    return res.status(400).json({ ok: false, error: 'Provide access code or email+password' });
+    return res.status(400).json({ ok: false, error: 'Provide username+password, access code, or email+password' });
   }
 
   // ── Admin-only routes below ──────────────────────────────────────────────────
   const isAdmin = await isAdminSession(req);
-  if (!isAdmin && !['login','admin-login'].includes(action)) {
-    // Allow filter read/write for authenticated users without admin
-    if (action !== 'filters') {
-      return res.status(403).json({ ok: false, error: 'Admin access required' });
-    }
+  if (!isAdmin && !['login', 'admin-login'].includes(action) && action !== 'filters') {
+    return res.status(403).json({ ok: false, error: 'Admin access required' });
   }
 
   // ── GET /api/users?action=list ───────────────────────────────────────────────
   if (req.method === 'GET' && action === 'list') {
-    const users = await getUsers();
-    return res.status(200).json({ ok: true, users });
+    return res.status(200).json({ ok: true, users: await getUsers() });
   }
 
   // ── POST /api/users?action=add ───────────────────────────────────────────────
   if (req.method === 'POST' && action === 'add') {
-    const { email, name, phone, expiresAt, notes, role, active, password } = req.body || {};
-    if (!email) return res.status(400).json({ ok: false, error: 'Email required' });
+    const { email, name, username, phone, expiresAt, notes, role, active, password } = body;
+    if (!email && !username) return res.status(400).json({ ok: false, error: 'Email or username required' });
 
     const users = await getUsers();
-    const existingIdx = users.findIndex(u => u.email?.toLowerCase() === email.toLowerCase());
+    const lookupKey = email?.toLowerCase() || username?.toLowerCase();
+    const existingIdx = users.findIndex(u =>
+      u.email?.toLowerCase() === lookupKey || u.username?.toLowerCase() === lookupKey
+    );
 
     const userRecord = {
       id:         existingIdx >= 0 ? users[existingIdx].id : Date.now().toString(),
-      email:      email.toLowerCase().trim(),
-      name:       name   || '',
-      phone:      phone  || '',
-      role:       role   || 'user',
+      email:      email?.toLowerCase().trim() || '',
+      username:   username?.trim() || name?.trim() || '',
+      name:       name || username || '',
+      phone:      phone || '',
+      role:       role  || 'user',
       password:   password || '',
       expiresAt:  expiresAt || null,
-      notes:      notes  || '',
+      notes:      notes || '',
       active:     active !== false,
       accessCode: existingIdx >= 0 ? users[existingIdx].accessCode : generateAccessCode(),
       createdAt:  existingIdx >= 0 ? users[existingIdx].createdAt : new Date().toISOString(),
       updatedAt:  new Date().toISOString(),
     };
 
-    if (existingIdx >= 0) {
-      users[existingIdx] = userRecord;
-    } else {
-      users.push(userRecord);
-    }
-
+    if (existingIdx >= 0) { users[existingIdx] = userRecord; } else { users.push(userRecord); }
     await saveUsers(users);
     return res.status(200).json({ ok: true, user: userRecord });
   }
@@ -197,7 +231,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  // ── POST /api/users?action=regenerate&id=123 — regenerate access code ────────
+  // ── POST /api/users?action=regenerate&id=123 ─────────────────────────────────
   if (req.method === 'POST' && action === 'regenerate') {
     if (!id) return res.status(400).json({ ok: false, error: 'id required' });
     const users = await getUsers();
@@ -209,15 +243,40 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, accessCode: users[idx].accessCode });
   }
 
-  // ── GET/POST /api/users?action=filters&uid=xxx — filter persistence ──────────
+  // ── POST /api/users?action=setExpiry — update expiry after payment ───────────
+  if (req.method === 'POST' && action === 'setExpiry') {
+    const { username: targetUser, plan, orderId } = body;
+    if (!targetUser || !plan) return res.status(400).json({ ok: false, error: 'username and plan required' });
+
+    const planDays = { monthly: 30, quarterly: 90, annual: 365 };
+    const days = planDays[plan];
+    if (!days) return res.status(400).json({ ok: false, error: 'Invalid plan. Use: monthly, quarterly, annual' });
+
+    const users = await getUsers();
+    const idx = users.findIndex(u =>
+      u.username?.toLowerCase() === targetUser.toLowerCase() ||
+      u.email?.toLowerCase()    === targetUser.toLowerCase()
+    );
+    if (idx < 0) return res.status(404).json({ ok: false, error: 'User not found' });
+
+    const newExpiry = new Date();
+    newExpiry.setDate(newExpiry.getDate() + days);
+    users[idx].expiresAt = newExpiry.toISOString();
+    users[idx].updatedAt = new Date().toISOString();
+    if (orderId) users[idx].lastOrderId = orderId;
+
+    await saveUsers(users);
+    return res.status(200).json({ ok: true, expiresAt: users[idx].expiresAt });
+  }
+
+  // ── GET/POST /api/users?action=filters&uid=xxx ───────────────────────────────
   if (action === 'filters') {
     if (!uid) return res.status(400).json({ ok: false, error: 'uid required' });
     if (req.method === 'GET') {
-      const filters = await redisGet(FILTERS_KEY(uid));
-      return res.status(200).json({ ok: true, filters: filters || {} });
+      return res.status(200).json({ ok: true, filters: (await redisGet(FILTERS_KEY(uid))) || {} });
     }
     if (req.method === 'POST') {
-      await redisSet(FILTERS_KEY(uid), req.body || {});
+      await redisSet(FILTERS_KEY(uid), body || {});
       return res.status(200).json({ ok: true });
     }
   }

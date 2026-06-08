@@ -1,23 +1,35 @@
-// src/LoginScreen.jsx — Access code / email login
-// Matches UOA Scanner login pattern: access code primary, email+password fallback.
+// src/LoginScreen.jsx — Username/password, access code, or email login
+// Stores expiresAt in session so App.js can check expiry on boot.
+// Supports shareable auto-login links: ?user=<username>&pass=<password>
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function LoginScreen({ onLogin }) {
-  const [mode,     setMode]   = useState('code');   // 'code' | 'email'
+  const [mode,     setMode]   = useState('username'); // 'username' | 'code' | 'email'
+  const [username, setUsername] = useState('');
   const [code,     setCode]   = useState('');
   const [email,    setEmail]  = useState('');
   const [password, setPass]   = useState('');
   const [loading,  setLoading]= useState(false);
   const [error,    setError]  = useState('');
 
-  async function doLogin() {
+  // Auto-login from shareable link: ?user=xxx&pass=yyy
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const u = params.get('user');
+    const p = params.get('pass');
+    if (u && p) {
+      setMode('username');
+      setUsername(u);
+      setPass(p);
+      // Auto-submit after state settles
+      setTimeout(() => doLoginWith({ username: u, password: p }), 100);
+    }
+  }, []);
+
+  async function doLoginWith(body) {
     setLoading(true); setError('');
     try {
-      const body = mode === 'code'
-        ? { code: code.trim().toUpperCase() }
-        : { email: email.trim(), password };
-
       const r = await fetch('/api/users?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,8 +39,18 @@ export default function LoginScreen({ onLogin }) {
       const d = await r.json();
 
       if (d.ok) {
-        sessionStorage.setItem('insider_user', JSON.stringify({ name: d.name, role: d.role, uid: d.uid }));
-        onLogin({ name: d.name, role: d.role, uid: d.uid });
+        const userData = {
+          name: d.name,
+          role: d.role,
+          uid: d.uid,
+          expiresAt: d.expiresAt || null,
+        };
+        sessionStorage.setItem('insider_user', JSON.stringify(userData));
+        // Clean URL if came from shareable link
+        if (window.location.search) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+        onLogin(userData);
       } else {
         setError(d.error || 'Login failed');
       }
@@ -39,6 +61,22 @@ export default function LoginScreen({ onLogin }) {
     }
   }
 
+  async function doLogin() {
+    if (mode === 'username') {
+      doLoginWith({ username: username.trim(), password });
+    } else if (mode === 'code') {
+      doLoginWith({ code: code.trim().toUpperCase() });
+    } else {
+      doLoginWith({ email: email.trim(), password });
+    }
+  }
+
+  const tabs = [
+    { key: 'username', label: '👤 Username' },
+    { key: 'code',     label: '🔑 Access Code' },
+    { key: 'email',    label: '✉️ Email' },
+  ];
+
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -46,7 +84,7 @@ export default function LoginScreen({ onLogin }) {
     }}>
       <div style={{
         background: '#fff', borderRadius: 16, padding: '40px 44px',
-        width: 360, boxShadow: '0 4px 24px rgba(0,0,0,.08)', border: '0.5px solid #e5e7eb',
+        width: 380, boxShadow: '0 4px 24px rgba(0,0,0,.08)', border: '0.5px solid #e5e7eb',
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
@@ -62,23 +100,63 @@ export default function LoginScreen({ onLogin }) {
         {/* Mode toggle */}
         <div style={{
           display: 'flex', background: '#f3f4f6', borderRadius: 8,
-          padding: 3, marginBottom: 20,
+          padding: 3, marginBottom: 20, gap: 2,
         }}>
-          {['code', 'email'].map(m => (
-            <button key={m} onClick={() => { setMode(m); setError(''); }} style={{
-              flex: 1, padding: '7px 0', fontSize: 13, fontWeight: 500,
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => { setMode(t.key); setError(''); }} style={{
+              flex: 1, padding: '7px 0', fontSize: 11, fontWeight: 500,
               border: 'none', borderRadius: 6, cursor: 'pointer',
-              background: mode === m ? '#fff' : 'transparent',
-              color: mode === m ? '#111827' : '#6b7280',
-              boxShadow: mode === m ? '0 1px 3px rgba(0,0,0,.1)' : 'none',
+              background: mode === t.key ? '#fff' : 'transparent',
+              color: mode === t.key ? '#111827' : '#6b7280',
+              boxShadow: mode === t.key ? '0 1px 3px rgba(0,0,0,.1)' : 'none',
               transition: 'all .15s',
             }}>
-              {m === 'code' ? '🔑 Access Code' : '✉️ Email Login'}
+              {t.label}
             </button>
           ))}
         </div>
 
-        {mode === 'code' ? (
+        {/* Username mode */}
+        {mode === 'username' && (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 6 }}>
+                Username
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && doLogin()}
+                placeholder="your username"
+                style={{
+                  width: '100%', padding: '9px 12px', border: '1px solid #d1d5db',
+                  borderRadius: 8, fontSize: 14, boxSizing: 'border-box',
+                }}
+                autoFocus
+              />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 6 }}>
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPass(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && doLogin()}
+                placeholder="Password"
+                style={{
+                  width: '100%', padding: '9px 12px', border: '1px solid #d1d5db',
+                  borderRadius: 8, fontSize: 14, boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Access code mode */}
+        {mode === 'code' && (
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 6 }}>
               Access Code
@@ -99,7 +177,10 @@ export default function LoginScreen({ onLogin }) {
               autoFocus
             />
           </div>
-        ) : (
+        )}
+
+        {/* Email mode */}
+        {mode === 'email' && (
           <>
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 6 }}>Email</label>
@@ -111,7 +192,7 @@ export default function LoginScreen({ onLogin }) {
                   borderRadius: 8, fontSize: 14, boxSizing: 'border-box',
                 }} />
             </div>
-            <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 16 }}>
               <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 6 }}>Password</label>
               <input type="password" value={password} onChange={e => setPass(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && doLogin()}

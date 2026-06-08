@@ -132,14 +132,16 @@ async function fetchTicker(ticker) {
 // Fields: Name, Ticker, Traded, Filed, Transaction, Trade_Size_USD, Chamber, Party, BioGuideID, excess_return
 function normalizeBulk(t) {
   if (!t) return null;
-  const tradeDate  = t.Traded      || t.TransactionDate || t.Date         || '';
-  const reportDate = t.Filed       || t.ReportDate      || t.DateRecieved || '';
-  const rep        = t.Name        || t.Representative  || t.Politician   || 'Unknown';
+  // Worker returns QuiverQuant historical field names
+  const tradeDate  = t.TransactionDate || t.Traded || t.Date || '';
+  const reportDate = t.ReportDate      || t.Filed  || '';
+  const rep        = t.Representative  || t.Name   || 'Unknown';
   const gap = tradeDate && reportDate
     ? Math.round((new Date(reportDate) - new Date(tradeDate)) / 86400000)
     : null;
   const tx = (t.Transaction || '').toLowerCase();
   const ticker = (t.Ticker || '').toUpperCase();
+  const amount = parseFloat(t.Amount || t.Trade_Size_USD || 0) || 0;
 
   return {
     id:             `${rep}-${ticker}-${tradeDate}-${tx}`,
@@ -148,9 +150,9 @@ function normalizeBulk(t) {
     transaction:    tx.includes('purchase') || tx.includes('buy')  ? 'Buy'
                   : tx.includes('sale')     || tx.includes('sell') ? 'Sell'
                   : t.Transaction || 'Unknown',
-    range:          '--',
-    amount:         parseFloat(t.Trade_Size_USD) || 0,
-    chamber:        normalizeChamber(t.Chamber || ''),
+    range:          t.Range || '--',
+    amount,
+    chamber:        normalizeChamber(t.House || t.Chamber || ''),
     party:          normalizeParty(t.Party || ''),
     tradeDate,
     reportDate,
@@ -159,9 +161,9 @@ function normalizeBulk(t) {
     tickerType:     t.TickerType || 'Stock',
     assetName:      t.Description || '',
     price:          'N/A',
-    owner:          'Self',
-    excessReturn:   t.excess_return != null ? `${parseFloat(t.excess_return) >= 0 ? '+' : ''}${parseFloat(t.excess_return).toFixed(1)}%` : null,
-    priceChange:    null,
+    owner:          t.Owner || 'Self',
+    excessReturn:   t.ExcessReturn != null ? `${parseFloat(t.ExcessReturn) >= 0 ? '+' : ''}${parseFloat(t.ExcessReturn).toFixed(1)}%` : null,
+    priceChange:    t.PriceChange  != null ? `${parseFloat(t.PriceChange)  >= 0 ? '+' : ''}${parseFloat(t.PriceChange).toFixed(1)}%`  : null,
     bioGuideId:     t.BioGuideID || '',
   };
 }

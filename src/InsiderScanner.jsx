@@ -590,25 +590,86 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
       </div>
 
       {/* ── Tab bar ─────────────────────────────────────────────────────────── */}
-      <div style={{ display:'flex', borderBottom:'0.5px solid #e5e7eb', background:'#fff', padding:'0 16px' }}>
-        {[
-          { id:'insider',  label:'📊 Corporate Insiders', sub:'SEC Form 4' },
-          { id:'congress', label:'🏛 Congress Trades',    sub:'STOCK Act' },
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            padding:'10px 20px', fontSize:13, fontWeight: activeTab===tab.id ? 700 : 400,
-            border:'none', borderBottom: activeTab===tab.id ? '2px solid #1d4ed8' : '2px solid transparent',
-            background:'transparent', color: activeTab===tab.id ? '#1d4ed8' : '#6b7280',
-            cursor:'pointer', marginBottom:'-1px', display:'flex', flexDirection:'column', alignItems:'center', gap:2,
-          }}>
-            {tab.label}
-            <span style={{ fontSize:9, color: activeTab===tab.id ? '#93c5fd' : '#9ca3af', fontWeight:400 }}>{tab.sub}</span>
-          </button>
-        ))}
-      </div>
+      {(() => {
+        const canAccessInsiders = ['pro', 'trial', 'owner'].includes(user?.role);
+        return (
+          <>
+            <div style={{ display:'flex', borderBottom:'0.5px solid #e5e7eb', background:'#fff', padding:'0 16px' }}>
+              <button
+                onClick={() => canAccessInsiders && setActiveTab('insider')}
+                style={{
+                  padding:'10px 20px', fontSize:13,
+                  fontWeight: activeTab==='insider' ? 700 : 400,
+                  border:'none', borderBottom: activeTab==='insider' ? '2px solid #1d4ed8' : '2px solid transparent',
+                  background:'transparent',
+                  color: canAccessInsiders ? (activeTab==='insider' ? '#1d4ed8' : '#6b7280') : '#d1d5db',
+                  cursor: canAccessInsiders ? 'pointer' : 'default',
+                  marginBottom:'-1px', display:'flex', flexDirection:'column', alignItems:'center', gap:2,
+                }}
+              >
+                {canAccessInsiders ? '📊' : '🔒'} Corporate Insiders
+                <span style={{ fontSize:9, color: activeTab==='insider' ? '#93c5fd' : '#9ca3af', fontWeight:400 }}>
+                  {canAccessInsiders ? 'SEC Form 4' : 'Pro plan required'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('congress')}
+                style={{
+                  padding:'10px 20px', fontSize:13,
+                  fontWeight: activeTab==='congress' ? 700 : 400,
+                  border:'none', borderBottom: activeTab==='congress' ? '2px solid #1d4ed8' : '2px solid transparent',
+                  background:'transparent', color: activeTab==='congress' ? '#1d4ed8' : '#6b7280',
+                  cursor:'pointer', marginBottom:'-1px', display:'flex', flexDirection:'column', alignItems:'center', gap:2,
+                }}
+              >
+                🏛 Congress Trades
+                <span style={{ fontSize:9, color: activeTab==='congress' ? '#93c5fd' : '#9ca3af', fontWeight:400 }}>STOCK Act</span>
+              </button>
+            </div>
+
+            {activeTab === 'insider' && !canAccessInsiders && (
+              <div style={{
+                margin:'32px auto', maxWidth:480, textAlign:'center',
+                background:'#faf5ff', border:'1.5px solid #ddd6fe',
+                borderRadius:16, padding:'40px 32px',
+              }}>
+                <div style={{ fontSize:32, marginBottom:12 }}>🔒</div>
+                <div style={{ fontSize:18, fontWeight:700, color:'#111827', marginBottom:8 }}>
+                  Pro Plan Required
+                </div>
+                <div style={{ fontSize:14, color:'#6b7280', marginBottom:24, lineHeight:1.6 }}>
+                  Corporate Insiders (SEC Form 4) data is available on the Pro plan.
+                  Upgrade to track C-suite and director purchases with signal scoring.
+                </div>
+                <button
+                  onClick={() => setActiveTab('congress')}
+                  style={{
+                    padding:'10px 24px', background:'#7c3aed', color:'#fff',
+                    border:'none', borderRadius:9, fontSize:14, fontWeight:600,
+                    cursor:'pointer', marginRight:10,
+                  }}
+                >
+                  Upgrade to Pro
+                </button>
+                <button
+                  onClick={() => setActiveTab('congress')}
+                  style={{
+                    padding:'10px 24px', background:'#f3f4f6', color:'#374151',
+                    border:'none', borderRadius:9, fontSize:14, fontWeight:500,
+                    cursor:'pointer',
+                  }}
+                >
+                  Go to Congress Trades
+                </button>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {activeTab === 'congress' ? <CongressTab /> : null}
-      {activeTab !== 'congress' ? <>
+      {activeTab === 'insider' && ['pro', 'trial', 'owner'].includes(user?.role) ? <>
       {/* ── Filters ────────────────────────────────────────────────────────── */}
       <div style={{ background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb', padding:'10px 16px', display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
         {/* Period pills */}

@@ -1,6 +1,51 @@
 // src/PricingPage.jsx — Shown when user account is expired
-// Three tiers: Trial (30d) / Basic / Pro
-// PayPal buttons wired in Phase 3 — CTAs are placeholders for now.
+// Three tiers: Trial / Basic ($19/mo) / Pro ($149/yr)
+// PayPal hosted buttons embedded per plan.
+
+import { useEffect, useState } from 'react';
+
+const PAYPAL_SCRIPT = 'https://www.paypal.com/sdk/js?client-id=sb&components=hosted-buttons&disable-funding=venmo&currency=USD';
+
+function loadPayPalScript() {
+  return new Promise((resolve, reject) => {
+    if (window.paypal) return resolve();
+    const script = document.createElement('script');
+    script.src = PAYPAL_SCRIPT;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+function PayPalButton({ hostedButtonId, containerId }) {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError]   = useState('');
+
+  useEffect(() => {
+    loadPayPalScript()
+      .then(() => {
+        window.paypal.HostedButtons({ hostedButtonId }).render(`#${containerId}`);
+        setLoaded(true);
+      })
+      .catch(() => setError('Failed to load PayPal'));
+  }, []); // eslint-disable-line
+
+  return (
+    <div>
+      {!loaded && !error && (
+        <div style={{ textAlign:'center', padding:'12px 0', fontSize:12, color:'#9ca3af' }}>
+          Loading PayPal…
+        </div>
+      )}
+      {error && (
+        <div style={{ textAlign:'center', padding:'8px', fontSize:12, color:'#dc2626' }}>
+          {error}
+        </div>
+      )}
+      <div id={containerId} />
+    </div>
+  );
+}
 
 export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
   const plans = [
@@ -33,15 +78,14 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
       bg: '#eff6ff',
       border: '#bfdbfe',
       badge: 'Most Popular',
+      hostedButtonId: 'JY2YCVD78YCPA',
+      containerId: 'paypal-container-JY2YCVD78YCPA',
       features: [
-        'Full Corporate Insiders feed',
         'Congress Trades (live)',
         'Signal scoring engine',
         'All filters + search',
         'Unlimited tickers',
       ],
-      cta: 'Get Basic — $19/mo',
-      ctaStyle: { background: '#1d4ed8', color: '#fff', border: 'none' },
     },
     {
       key: 'annual',
@@ -52,6 +96,8 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
       bg: '#faf5ff',
       border: '#ddd6fe',
       badge: 'Best Value',
+      hostedButtonId: 'R7RLG2G4YE57U',
+      containerId: 'paypal-container-R7RLG2G4YE57U',
       features: [
         'Corporate Insiders trades (SEC Form 4)',
         'Everything in Basic',
@@ -60,8 +106,6 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
         'Early access to new features',
         '2 months free vs monthly',
       ],
-      cta: 'Get Pro — $149/yr',
-      ctaStyle: { background: '#7c3aed', color: '#fff', border: 'none' },
     },
   ];
 
@@ -107,6 +151,7 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
               </div>
             )}
 
+            {/* Plan name + price */}
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: plan.color, marginBottom: 6 }}>
                 {plan.name}
@@ -117,6 +162,7 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
               </div>
             </div>
 
+            {/* Features */}
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', flex: 1 }}>
               {plan.features.map((f, i) => (
                 <li key={i} style={{
@@ -129,28 +175,28 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
               ))}
             </ul>
 
-            <button
-              onClick={() => {
-                if (plan.key === 'trial') {
-                  window.location.href = 'mailto:admin@example.com?subject=Trial Access Request&body=Please activate my 30-day trial for Insider Scanner.';
-                } else {
-                  alert(`PayPal integration coming soon for ${plan.name} plan`);
-                }
-              }}
-              style={{
-                width: '100%', padding: '12px 0', borderRadius: 10,
-                fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                transition: 'opacity .15s',
-                ...plan.ctaStyle,
-              }}
-            >
-              {plan.cta}
-            </button>
-
-            {plan.ctaNote && (
-              <div style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginTop: 8 }}>
-                {plan.ctaNote}
-              </div>
+            {/* CTA */}
+            {plan.key === 'trial' ? (
+              <>
+                <button
+                  onClick={() => window.location.href = 'mailto:admin@example.com?subject=Trial Access Request&body=Please activate my 30-day trial for Insider Scanner.'}
+                  style={{
+                    width: '100%', padding: '12px 0', borderRadius: 10,
+                    fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                    ...plan.ctaStyle,
+                  }}
+                >
+                  {plan.cta}
+                </button>
+                <div style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginTop: 8 }}>
+                  {plan.ctaNote}
+                </div>
+              </>
+            ) : (
+              <PayPalButton
+                hostedButtonId={plan.hostedButtonId}
+                containerId={plan.containerId}
+              />
             )}
           </div>
         ))}

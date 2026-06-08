@@ -7,6 +7,7 @@ import LoginScreen from './LoginScreen';
 import InsiderScanner from './InsiderScanner';
 import AdminPanel from './AdminPanel';
 import PricingPage from './PricingPage';
+import PaymentSuccess from './PaymentSuccess';
 
 function isExpired(expiresAt) {
   if (!expiresAt) return false; // no expiry = never expires
@@ -69,6 +70,19 @@ export default function App() {
   }
 
   if (booting) return null;
+
+  // Handle PayPal return URL
+  if (window.location.pathname === '/payment-success') {
+    return (
+      <PaymentSuccess
+        onSuccess={(updatedUser) => {
+          setUser(updatedUser);
+          setShowPricing(false);
+          window.history.replaceState({}, '', '/');
+        }}
+      />
+    );
+  }
 
   if (showPricing) {
     return (

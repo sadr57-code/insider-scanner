@@ -70,7 +70,7 @@ function PayPalButton({ hostedButtonId, containerId }) {
   );
 }
 
-export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
+export default function PricingPage({ user, onLogout, onPaymentSuccess, onTerms, onDisclaimer }) {
   const plans = [
     {
       key: 'trial',
@@ -233,7 +233,11 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
           Sign out
         </button>
         <div style={{ fontSize: 11, color: '#d1d5db', marginTop: 8 }}>
-          Questions? Contact your administrator.
+          Questions? <a href="mailto:support@itasinc.net" style={{ color: '#9ca3af' }}>support@itasinc.net</a>
+        </div>
+        <div style={{ marginTop: 12, display: 'flex', gap: 16, justifyContent: 'center' }}>
+          <button onClick={onTerms} style={{ background: 'none', border: 'none', fontSize: 11, color: '#9ca3af', cursor: 'pointer', textDecoration: 'underline' }}>Terms of Use</button>
+          <button onClick={onDisclaimer} style={{ background: 'none', border: 'none', fontSize: 11, color: '#9ca3af', cursor: 'pointer', textDecoration: 'underline' }}>Disclaimer</button>
         </div>
       </div>
     </div>

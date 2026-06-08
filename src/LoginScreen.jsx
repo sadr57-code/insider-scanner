@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 
-export default function LoginScreen({ onLogin }) {
+export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
   const [mode,     setMode]   = useState('username'); // 'username' | 'code' | 'email'
   const [username, setUsername] = useState('');
   const [code,     setCode]   = useState('');
@@ -229,6 +229,10 @@ export default function LoginScreen({ onLogin }) {
 
         <div style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: '#d1d5db' }}>
           Access restricted · Contact admin for credentials
+        </div>
+        <div style={{ marginTop: 12, display: 'flex', gap: 16, justifyContent: 'center' }}>
+          <button onClick={onTerms} style={{ background: 'none', border: 'none', fontSize: 11, color: '#d1d5db', cursor: 'pointer', textDecoration: 'underline' }}>Terms of Use</button>
+          <button onClick={onDisclaimer} style={{ background: 'none', border: 'none', fontSize: 11, color: '#d1d5db', cursor: 'pointer', textDecoration: 'underline' }}>Disclaimer</button>
         </div>
       </div>
     </div>

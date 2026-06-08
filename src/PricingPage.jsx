@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 
-const PAYPAL_SCRIPT = 'https://www.paypal.com/sdk/js?client-id=sb&components=hosted-buttons&disable-funding=venmo&currency=USD';
+const PAYPAL_SCRIPT = 'https://www.paypal.com/sdk/js?client-id=AdEdyJWvCdkfiM_1ys73G-yec09M4MW_XD5ScSwsGe3QRrkI2Ge0U_f7zwwstWK6H_ZfDaki47Hzx9dC&components=hosted-buttons&disable-funding=venmo&currency=USD';
 
 function loadPayPalScript() {
   return new Promise((resolve, reject) => {
@@ -177,21 +177,17 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess }) {
 
             {/* CTA */}
             {plan.key === 'trial' ? (
-              <>
-                <button
-                  onClick={() => window.location.href = 'mailto:admin@example.com?subject=Trial Access Request&body=Please activate my 30-day trial for Insider Scanner.'}
-                  style={{
-                    width: '100%', padding: '12px 0', borderRadius: 10,
-                    fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                    ...plan.ctaStyle,
-                  }}
-                >
-                  {plan.cta}
-                </button>
-                <div style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', marginTop: 8 }}>
-                  {plan.ctaNote}
+              <div style={{
+                background: '#f0fdf4', border: '1px solid #bbf7d0',
+                borderRadius: 10, padding: '14px 16px', textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#059669', marginBottom: 6 }}>
+                  Want a free 30-day trial?
                 </div>
-              </>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                  Contact your administrator to activate a trial account.
+                </div>
+              </div>
             ) : (
               <PayPalButton
                 hostedButtonId={plan.hostedButtonId}

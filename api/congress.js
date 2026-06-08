@@ -132,8 +132,9 @@ async function fetchTicker(ticker) {
 // Fields: Name, Ticker, Traded, Filed, Transaction, Trade_Size_USD, Chamber, Party, BioGuideID, excess_return
 function normalizeBulk(t) {
   if (!t) return null;
-  const tradeDate  = t.Traded || '';
-  const reportDate = t.Filed || '';
+  const tradeDate  = t.Traded      || t.TransactionDate || t.Date         || '';
+  const reportDate = t.Filed       || t.ReportDate      || t.DateRecieved || '';
+  const rep        = t.Name        || t.Representative  || t.Politician   || 'Unknown';
   const gap = tradeDate && reportDate
     ? Math.round((new Date(reportDate) - new Date(tradeDate)) / 86400000)
     : null;
@@ -141,8 +142,8 @@ function normalizeBulk(t) {
   const ticker = (t.Ticker || '').toUpperCase();
 
   return {
-    id:             `${t.Name}-${ticker}-${tradeDate}-${tx}`,
-    representative: t.Name || 'Unknown',
+    id:             `${rep}-${ticker}-${tradeDate}-${tx}`,
+    representative: rep,
     ticker,
     transaction:    tx.includes('purchase') || tx.includes('buy')  ? 'Buy'
                   : tx.includes('sale')     || tx.includes('sell') ? 'Sell'
@@ -159,7 +160,7 @@ function normalizeBulk(t) {
     assetName:      t.Description || '',
     price:          'N/A',
     owner:          'Self',
-    excessReturn:   t.excess_return != null ? `\${parseFloat(t.excess_return) >= 0 ? '+' : ''}\${parseFloat(t.excess_return).toFixed(1)}%` : null,
+    excessReturn:   t.excess_return != null ? `${parseFloat(t.excess_return) >= 0 ? '+' : ''}${parseFloat(t.excess_return).toFixed(1)}%` : null,
     priceChange:    null,
     bioGuideId:     t.BioGuideID || '',
   };

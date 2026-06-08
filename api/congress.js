@@ -10,7 +10,7 @@ const redis = new Redis({
 });
 
 const QUIVER_KEY = process.env.QUIVER_API_KEY;
-const CACHE_KEY  = 'congress:feed:v3:latest';
+const CACHE_KEY  = 'congress:feed:v4:latest';
 const CACHE_TTL  = 7200; // 2hrs
 
 export default async function handler(req, res) {

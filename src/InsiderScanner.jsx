@@ -355,13 +355,13 @@ function CongressTab() {
                       </span>
                     </td>
                     <td style={{ padding:'9px 10px', fontWeight:500, color: t.amount>=500000 ? '#92400e' : t.amount>=100000 ? '#4c1d95' : '#374151' }}>
-                      {t.range || '—'}
+                      {t.range && t.range !== '--' ? t.range : t.amount > 0 ? fmt$(t.amount) : '—'}
                     </td>
                     <td style={{ padding:'9px 10px', fontWeight:500, color: (typeof t.excessReturn === 'string' ? t.excessReturn : String(t.excessReturn ?? '')).startsWith('-') ? '#dc2626' : '#065f46' }}>
-                      {t.excessReturn || '—'}
+                      {t.excessReturn && t.excessReturn !== '--' ? t.excessReturn : '—'}
                     </td>
                     <td style={{ padding:'9px 10px', color: (typeof t.priceChange === 'string' ? t.priceChange : String(t.priceChange ?? '')).startsWith('-') ? '#dc2626' : '#065f46' }}>
-                      {t.priceChange || '—'}
+                      {t.priceChange && t.priceChange !== '--' ? t.priceChange : '—'}
                     </td>
                     <td style={{ padding:'9px 10px', color:'#9ca3af', textAlign:'center' }}>
                       <span style={{ transition:'transform .2s', display:'inline-block', transform: isOpen ? 'rotate(180deg)' : '' }}>▾</span>

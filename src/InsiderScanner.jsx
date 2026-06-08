@@ -128,8 +128,8 @@ function CongressTab() {
       if (party   !== 'All' && t.party   !== party)   return false;
       if (txType  !== 'All' && t.transaction !== txType) return false;
       if (lateOnly && !t.lateFlag) return false;
-      if (ticker && !t.ticker.includes(ticker.toUpperCase())) return false;
-      if (search && !t.representative.toLowerCase().includes(search.toLowerCase())) return false;
+      if (ticker && !(t.ticker||'').includes(ticker.toUpperCase())) return false;
+      if (search && !(t.representative||'').toLowerCase().includes(search.toLowerCase())) return false;
       if (t.tradeDate && new Date(t.tradeDate) < cutoff) return false;
       return true;
     })
@@ -137,7 +137,7 @@ function CongressTab() {
       const av = a[sortCol] ?? '', bv = b[sortCol] ?? '';
       if (sortCol === 'amount' || sortCol === 'reportingGap')
         return ((Number(av)||0) - (Number(bv)||0)) * sortDir;
-      return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * sortDir;
+      return (typeof av === 'string' ? av.localeCompare(String(bv??'')) : (av??0) - (bv??0)) * sortDir;
     });
 
   const SortTh = ({ col, children }) => (

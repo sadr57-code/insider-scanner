@@ -4,42 +4,65 @@
 
 import { useEffect, useState } from 'react';
 
-const PAYPAL_SCRIPT = 'https://www.paypal.com/sdk/js?client-id=AdEdyJWvCdkfiM_1ys73G-yec09M4MW_XD5ScSwsGe3QRrkI2Ge0U_f7zwwstWK6H_ZfDaki47Hzx9dC&components=hosted-buttons&disable-funding=venmo&currency=USD';
+const PAYPAL_CLIENT_ID = 'AbtcZ0F1tryO62gRrCTmpFKeFL_yfCupTYgAawR23AbPD27BwLx78WtoFyQRnsDhN2wE7R-4O7qDQfhy';
+const PAYPAL_SCRIPT = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&components=hosted-buttons&disable-funding=venmo&currency=USD`;
+
+let paypalScriptPromise = null;
 
 function loadPayPalScript() {
-  return new Promise((resolve, reject) => {
+  if (paypalScriptPromise) return paypalScriptPromise;
+  paypalScriptPromise = new Promise((resolve, reject) => {
+    // Already loaded
     if (window.paypal) return resolve();
+    // Script tag already in DOM
+    if (document.querySelector(`script[src*="paypal.com/sdk"]`)) {
+      const interval = setInterval(() => {
+        if (window.paypal) { clearInterval(interval); resolve(); }
+      }, 100);
+      return;
+    }
     const script = document.createElement('script');
     script.src = PAYPAL_SCRIPT;
     script.onload = resolve;
-    script.onerror = reject;
+    script.onerror = () => { paypalScriptPromise = null; reject(new Error('Failed to load PayPal')); };
     document.head.appendChild(script);
   });
+  return paypalScriptPromise;
 }
 
 function PayPalButton({ hostedButtonId, containerId }) {
-  const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
   const [error, setError]   = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     loadPayPalScript()
       .then(() => {
-        window.paypal.HostedButtons({ hostedButtonId }).render(`#${containerId}`);
-        setLoaded(true);
+        if (cancelled) return;
+        // Small delay to ensure DOM is ready
+        setTimeout(() => {
+          try {
+            window.paypal.HostedButtons({ hostedButtonId }).render(`#${containerId}`);
+            if (!cancelled) setStatus('ready');
+          } catch (e) {
+            if (!cancelled) { setStatus('error'); setError(e.message); }
+          }
+        }, 100);
       })
-      .catch(() => setError('Failed to load PayPal'));
+      .catch(e => { if (!cancelled) { setStatus('error'); setError(e.message); } });
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line
 
   return (
     <div>
-      {!loaded && !error && (
+      {status === 'loading' && (
         <div style={{ textAlign:'center', padding:'12px 0', fontSize:12, color:'#9ca3af' }}>
           Loading PayPal…
         </div>
       )}
-      {error && (
+      {status === 'error' && (
         <div style={{ textAlign:'center', padding:'8px', fontSize:12, color:'#dc2626' }}>
-          {error}
+          {error || 'Failed to load PayPal'}
         </div>
       )}
       <div id={containerId} />

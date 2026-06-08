@@ -102,7 +102,7 @@ console.log('[congress] worker response status:', r.status);
   const trades = [];
 
   for (const t of raw) {
-    const trade = normalizeHistorical(t, t.Ticker);
+    const trade = normalizeBulk(t);
     if (!trade) continue;
     if (seen.has(trade.id)) continue;
     if (trade.tradeDate && new Date(trade.tradeDate) < CUTOFF) continue;
@@ -159,7 +159,7 @@ function normalizeBulk(t) {
     assetName:      t.Description || '',
     price:          'N/A',
     owner:          'Self',
-    excessReturn:   t.excess_return ? parseFloat(t.excess_return) : null,
+    excessReturn:   t.excess_return != null ? `\${parseFloat(t.excess_return) >= 0 ? '+' : ''}\${parseFloat(t.excess_return).toFixed(1)}%` : null,
     priceChange:    null,
     bioGuideId:     t.BioGuideID || '',
   };

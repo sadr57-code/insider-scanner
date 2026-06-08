@@ -518,7 +518,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
 
   const sorted = [...trades].sort((a, b) => {
     const av = a[sortCol], bv = b[sortCol];
-    if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+    if (typeof av === 'string') return av.localeCompare(String(bv??'')) * sortDir;
     return ((av ?? 0) - (bv ?? 0)) * sortDir;
   });
 

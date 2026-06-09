@@ -2,7 +2,7 @@
 // Three tiers: Trial / Basic ($19/mo) / Pro ($149/yr)
 // PayPal hosted buttons embedded per plan.
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 
 const PAYPAL_CLIENT_ID = 'AbtcZ0F1tryO62gRrCTmpFKeFL_yfCupTYgAawR23AbPD27BwLx78WtoFyQRnsDhN2wE7R-4O7qDQfhy';
 const PAYPAL_SCRIPT = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&components=hosted-buttons&disable-funding=venmo&currency=USD`;

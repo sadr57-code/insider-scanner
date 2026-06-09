@@ -245,7 +245,7 @@ export default async function handler(req, res) {
 
   // ── POST /api/users?action=signup — self-serve 14-day trial ────────────────────
   if (req.method === 'POST' && action === 'signup') {
-    const { username, password } = body;
+    const { username, password, name, email, phone } = body;
     if (!username || !password) return res.status(400).json({ ok: false, error: 'Username and password required' });
     if (username.length < 3) return res.status(400).json({ ok: false, error: 'Username must be at least 3 characters' });
     if (password.length < 6) return res.status(400).json({ ok: false, error: 'Password must be at least 6 characters' });
@@ -263,9 +263,9 @@ export default async function handler(req, res) {
     const newUser = {
       id:         Date.now().toString(),
       username:   username.trim(),
-      name:       username.trim(),
-      email:      '',
-      phone:      '',
+      name:       name?.trim() || username.trim(),
+      email:      email?.trim().toLowerCase() || '',
+      phone:      phone?.trim() || '',
       role:       'trial',
       password:   password,
       expiresAt:  trialExpiry.toISOString(),
@@ -281,9 +281,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      name: newUser.name,
-      role: newUser.role,
-      uid:  newUser.id,
+      name:      newUser.name,
+      role:      newUser.role,
+      uid:       newUser.id,
       expiresAt: newUser.expiresAt,
     });
   }

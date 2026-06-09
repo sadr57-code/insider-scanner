@@ -100,6 +100,7 @@ export default function App() {
         onPaymentSuccess={handlePaymentSuccess}
         onTerms={() => setShowTerms(true)}
         onDisclaimer={() => setShowDisclaimer(true)}
+        onLogin={handleLogin}
       />
     );
   }

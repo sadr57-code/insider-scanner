@@ -243,6 +243,51 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, accessCode: users[idx].accessCode });
   }
 
+  // ── POST /api/users?action=signup — self-serve 14-day trial ────────────────────
+  if (req.method === 'POST' && action === 'signup') {
+    const { username, password } = body;
+    if (!username || !password) return res.status(400).json({ ok: false, error: 'Username and password required' });
+    if (username.length < 3) return res.status(400).json({ ok: false, error: 'Username must be at least 3 characters' });
+    if (password.length < 6) return res.status(400).json({ ok: false, error: 'Password must be at least 6 characters' });
+
+    const users = await getUsers();
+
+    // Check username not taken
+    const taken = users.find(u => u.username?.toLowerCase() === username.toLowerCase());
+    if (taken) return res.status(409).json({ ok: false, error: 'Username already taken' });
+
+    // Create trial user — 14 days
+    const trialExpiry = new Date();
+    trialExpiry.setDate(trialExpiry.getDate() + 14);
+
+    const newUser = {
+      id:         Date.now().toString(),
+      username:   username.trim(),
+      name:       username.trim(),
+      email:      '',
+      phone:      '',
+      role:       'trial',
+      password:   password,
+      expiresAt:  trialExpiry.toISOString(),
+      notes:      'Self-serve trial signup',
+      active:     true,
+      accessCode: generateAccessCode(),
+      createdAt:  new Date().toISOString(),
+      updatedAt:  new Date().toISOString(),
+    };
+
+    users.push(newUser);
+    await saveUsers(users);
+
+    return res.status(200).json({
+      ok: true,
+      name: newUser.name,
+      role: newUser.role,
+      uid:  newUser.id,
+      expiresAt: newUser.expiresAt,
+    });
+  }
+
   // ── POST /api/users?action=setExpiry — update expiry after payment ───────────
   if (req.method === 'POST' && action === 'setExpiry') {
     const { username: targetUser, plan, orderId } = body;

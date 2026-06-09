@@ -2,7 +2,7 @@
 // Three tiers: Trial / Basic ($19/mo) / Pro ($149/yr)
 // PayPal hosted buttons embedded per plan.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 const PAYPAL_CLIENT_ID = 'AbtcZ0F1tryO62gRrCTmpFKeFL_yfCupTYgAawR23AbPD27BwLx78WtoFyQRnsDhN2wE7R-4O7qDQfhy';
 const PAYPAL_SCRIPT = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&components=hosted-buttons&disable-funding=venmo&currency=USD`;
@@ -70,7 +70,110 @@ function PayPalButton({ hostedButtonId, containerId }) {
   );
 }
 
-export default function PricingPage({ user, onLogout, onPaymentSuccess, onTerms, onDisclaimer }) {
+function TrialSignupForm({ onLogin }) {
+  const [open, setOpen]       = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+
+  async function handleSignup() {
+    if (!username.trim() || !password.trim()) { setError('Username and password required'); return; }
+    setLoading(true); setError('');
+    try {
+      const r = await fetch('/api/users?action=signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        const userData = { name: d.name, role: d.role, uid: d.uid, expiresAt: d.expiresAt };
+        sessionStorage.setItem('insider_user', JSON.stringify(userData));
+        onLogin && onLogin(userData);
+      } else {
+        setError(d.error || 'Signup failed');
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!open) return (
+    <button
+      onClick={() => setOpen(true)}
+      style={{
+        width: '100%', padding: '12px 0', borderRadius: 10,
+        fontSize: 14, fontWeight: 600, cursor: 'pointer',
+        background: '#059669', color: '#fff', border: 'none',
+      }}
+    >
+      Start Free Trial
+    </button>
+  );
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4 }}>Choose a username</label>
+        <input
+          type="text" value={username} onChange={e => setUsername(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSignup()}
+          placeholder="username"
+          autoFocus
+          style={{
+            width: '100%', padding: '8px 10px', border: '1px solid #d1d5db',
+            borderRadius: 8, fontSize: 13, boxSizing: 'border-box',
+          }}
+        />
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4 }}>Set a password</label>
+        <input
+          type="password" value={password} onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSignup()}
+          placeholder="min 6 characters"
+          style={{
+            width: '100%', padding: '8px 10px', border: '1px solid #d1d5db',
+            borderRadius: 8, fontSize: 13, boxSizing: 'border-box',
+          }}
+        />
+      </div>
+      {error && (
+        <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 8 }}>{error}</div>
+      )}
+      <button
+        onClick={handleSignup} disabled={loading}
+        style={{
+          width: '100%', padding: '10px 0', borderRadius: 8,
+          fontSize: 13, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+          background: loading ? '#6ee7b7' : '#059669', color: '#fff', border: 'none',
+          marginBottom: 6,
+        }}
+      >
+        {loading ? 'Creating account...' : 'Create my trial account'}
+      </button>
+      <button
+        onClick={() => { setOpen(false); setError(''); }}
+        style={{
+          width: '100%', padding: '6px 0', borderRadius: 8,
+          fontSize: 12, cursor: 'pointer',
+          background: 'transparent', color: '#6b7280', border: 'none',
+        }}
+      >
+        Cancel
+      </button>
+      <div style={{ fontSize: 10, color: '#9ca3af', textAlign: 'center', marginTop: 4 }}>
+        14-day full access · No credit card needed
+      </div>
+    </div>
+  );
+}
+
+export default function PricingPage({ user, onLogout, onPaymentSuccess, onTerms, onDisclaimer, onLogin }) {
   const plans = [
     {
       key: 'trial',
@@ -95,7 +198,7 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess, onTerms,
     {
       key: 'monthly',
       name: 'Basic',
-      price: '$19',
+      price: '$29',
       period: 'per month',
       color: '#1d4ed8',
       bg: '#eff6ff',
@@ -113,7 +216,7 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess, onTerms,
     {
       key: 'annual',
       name: 'Pro',
-      price: '$149',
+      price: '$199',
       period: 'per year',
       color: '#7c3aed',
       bg: '#faf5ff',
@@ -200,17 +303,7 @@ export default function PricingPage({ user, onLogout, onPaymentSuccess, onTerms,
 
             {/* CTA */}
             {plan.key === 'trial' ? (
-              <div style={{
-                background: '#f0fdf4', border: '1px solid #bbf7d0',
-                borderRadius: 10, padding: '14px 16px', textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#059669', marginBottom: 6 }}>
-                  Want a free 30-day trial?
-                </div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>
-                  Email <a href='mailto:support@itasinc.net' style={{color:'#059669'}}>support@itasinc.net</a> to activate a trial account.
-                </div>
-              </div>
+              <TrialSignupForm onLogin={onLogin} />
             ) : (
               <PayPalButton
                 hostedButtonId={plan.hostedButtonId}

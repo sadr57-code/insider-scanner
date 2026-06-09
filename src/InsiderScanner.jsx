@@ -86,6 +86,8 @@ function CongressTab() {
   const [error,     setError]    = useState('');
   const [source,    setSource]   = useState(null);
   const [fetchedAt, setFetchedAt]= useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [cacheSource, setCacheSource] = useState(null);
 
   const [chamber,   setChamber]  = useState('All');
   const [party,     setParty]    = useState('All');
@@ -107,6 +109,8 @@ function CongressTab() {
       if (!data.ok) throw new Error(data.error || 'API error');
       setTrades(data.trades || []);
       setSource(data.source);
+      setCacheSource(data.source);
+      setLastUpdated(data.lastUpdated || null);
       setFetchedAt(new Date().toLocaleTimeString());
     } catch (e) { setError(e.message); }
     setLoading(false);
@@ -260,7 +264,16 @@ function CongressTab() {
         <div style={{ background:'#f9fafb', border:'0.5px solid #e5e7eb', borderRadius:10, padding:'12px 16px', flex:'1 1 120px' }}>
           <div style={{ fontSize:11, color:'#6b7280', marginBottom:4 }}>Total Trades</div>
           <div style={{ fontSize:22, fontWeight:600, color:'#111827' }}>{filtered.length}</div>
-          <div style={{ fontSize:11, color:'#9ca3af' }}>{fetchedAt ? 'as of ' + fetchedAt : ''}</div>
+          <div style={{ fontSize:11, color:'#9ca3af' }}>
+            {lastUpdated ? (() => {
+              const mins = Math.round((Date.now() - new Date(lastUpdated)) / 60000);
+              if (mins < 2) return 'Data: just updated';
+              if (mins < 60) return `Data: ${mins} min ago`;
+              const hrs = Math.round(mins / 60);
+              return `Data: ${hrs}h ago`;
+            })() : fetchedAt ? `fetched ${fetchedAt}` : ''}
+            {cacheSource === 'stale' && <span style={{ color:'#d97706', marginLeft:4 }}>⚠ cached</span>}
+          </div>
         </div>
         <div style={{ background:'#d1fae5', border:'0.5px solid #6ee7b7', borderRadius:10, padding:'12px 16px', flex:'1 1 120px' }}>
           <div style={{ fontSize:11, color:'#065f46', marginBottom:4 }}>Buys</div>

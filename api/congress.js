@@ -44,29 +44,45 @@ export default async function handler(req, res) {
   }
 
   // Full feed -- serve from cache
+  // Always read cache first so we have a fallback if fresh fetch fails
+  let cachedTrades = null;
+  let cachedLastUpdated = null;
   try {
-    if (!bust) {
-      const cached = await redis.get(CACHE_KEY);
-      if (cached && Array.isArray(cached) && cached.length > 0) {
-        const lastUpdated = await redis.get('congress:feed:lastUpdated');
-        res.setHeader('X-Cache', 'HIT');
-        return res.json({ ok: true, trades: cached, source: 'quiver', lastUpdated });
-      }
-    }
+    cachedTrades = await redis.get(CACHE_KEY);
+    cachedLastUpdated = await redis.get('congress:feed:lastUpdated');
+  } catch (cacheReadErr) {
+    console.error('[congress] Redis read failed:', cacheReadErr.message);
+  }
 
+  // Serve cache on HIT (unless bust requested)
+  if (!bust && cachedTrades && Array.isArray(cachedTrades) && cachedTrades.length > 0) {
+    res.setHeader('X-Cache', 'HIT');
+    return res.json({ ok: true, trades: cachedTrades, source: 'cache', lastUpdated: cachedLastUpdated });
+  }
+
+  // Attempt fresh fetch
+  try {
     const trades = await fetchBulk();
     try {
-  await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });
-  await redis.set('congress:feed:lastUpdated', new Date().toISOString(), { ex: CACHE_TTL });
-} catch (cacheErr) {
-  console.error('[congress] Redis cache write failed:', cacheErr.message);
-}
-
-res.setHeader('X-Cache', bust ? 'BUSTED' : 'MISS');
-return res.json({ ok: true, trades, source: 'quiver', count: trades.length });
+      await redis.set(CACHE_KEY, trades, { ex: CACHE_TTL });
+      await redis.set('congress:feed:lastUpdated', new Date().toISOString(), { ex: CACHE_TTL });
+    } catch (cacheWriteErr) {
+      console.error('[congress] Redis write failed:', cacheWriteErr.message);
+    }
+    res.setHeader('X-Cache', bust ? 'BUSTED' : 'MISS');
+    return res.json({ ok: true, trades, source: 'live', lastUpdated: new Date().toISOString(), count: trades.length });
 
   } catch (err) {
-    console.error('[congress] ERROR:', err.message);
+    console.error('[congress] fetch ERROR:', err.message);
+
+    // Fallback: serve stale cache even if TTL expired — better than mock data
+    if (cachedTrades && Array.isArray(cachedTrades) && cachedTrades.length > 0) {
+      console.log('[congress] serving stale cache as fallback');
+      res.setHeader('X-Cache', 'STALE');
+      return res.json({ ok: true, trades: cachedTrades, source: 'stale', lastUpdated: cachedLastUpdated, warning: 'Live data unavailable — showing cached data' });
+    }
+
+    // Last resort: mock data
     return res.json({ ok: true, trades: getMockTrades(), source: 'mock', error: err.message });
   }
 }

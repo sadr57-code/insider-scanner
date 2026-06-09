@@ -582,8 +582,13 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           {lastUpdate && (
-            <span style={{ fontSize:10, color:'#9ca3af' }}>
-              Updated {lastUpdate.toLocaleTimeString()}
+            <span style={{ fontSize:10, color:'#6b7280' }}>
+              {(() => {
+                const mins = Math.round((Date.now() - lastUpdate) / 60000);
+                if (mins < 2) return 'Data: just updated';
+                if (mins < 60) return `Data: ${mins} min ago`;
+                return `Data: ${Math.round(mins/60)}h ago`;
+              })()}
             </span>
           )}
           <button style={btnStyle} onClick={() => fetchTrades({ refresh: true })} disabled={loading}>

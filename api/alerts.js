@@ -17,6 +17,13 @@ const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const RESEND_KEY  = process.env.RESEND_API_KEY;
 const FROM_EMAIL  = process.env.ALERT_FROM_EMAIL || 'LionBlade Alerts <alerts@alerts.itasinc.net>';
 const USERS_KEY   = 'insider:users';
+const OWNER_EMAIL = process.env.OWNER_EMAIL || '';
+
+// ─── Owner bypass — owner uid is hardcoded string 'owner', no Redis record ───
+function resolveUser(uid, users) {
+  if (uid === 'owner') return { id: 'owner', role: 'owner', email: OWNER_EMAIL, name: 'Owner' };
+  return users.find(u => u.id === uid) || null;
+}
 
 // ─── Redis helpers ────────────────────────────────────────────────────────────
 async function redisGet(key) {
@@ -179,7 +186,7 @@ export default async function handler(req, res) {
     const { uid } = req.query;
     if (!uid) return res.status(400).json({ ok: false, error: 'uid required' });
     const users = await getUsers();
-    const user  = users.find(u => u.id === uid);
+    const user  = resolveUser(uid, users);
     if (!isPaidUser(user)) return res.status(403).json({ ok: false, error: 'Alerts available for paid subscribers only.' });
     const raw    = (await redisGet(alertConfigsKey(uid))) || [];
     const alerts = pruneExpired(raw);
@@ -197,7 +204,7 @@ export default async function handler(req, res) {
     if (!syms.length) return res.status(400).json({ ok: false, error: 'tickers required' });
 
     const users = await getUsers();
-    const user  = users.find(u => u.id === uid);
+    const user  = resolveUser(uid, users);
     if (!isPaidUser(user)) return res.status(403).json({ ok: false, error: 'Alerts available for paid subscribers only.' });
     if (!user.email)       return res.status(400).json({ ok: false, error: 'No email on file. Contact support.' });
 
@@ -238,7 +245,7 @@ export default async function handler(req, res) {
     const { uid, ticker, trades, feed } = body;
     if (!uid || !ticker || !trades?.length) return res.status(400).json({ ok: false, error: 'uid, ticker, trades required' });
     const users = await getUsers();
-    const user  = users.find(u => u.id === uid);
+    const user  = resolveUser(uid, users);
     if (!user?.email) return res.status(400).json({ ok: false, error: 'No email for user' });
     const result = await sendAlertEmail({ to: user.email, toName: user.name, ticker, trades, feed });
     return res.status(result.ok ? 200 : 500).json(result);

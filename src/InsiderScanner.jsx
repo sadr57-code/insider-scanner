@@ -414,7 +414,7 @@ function CongressTab() {
   );
 }
 
-export default function InsiderScanner({ user, onLogout, onAdmin }) {
+export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDisclaimer }) {
   const [trades,    setTrades]   = useState([]);
   const [meta,      setMeta]     = useState({});
   const [loading,   setLoading]  = useState(false);
@@ -870,6 +870,17 @@ export default function InsiderScanner({ user, onLogout, onAdmin }) {
         Source: SEC EDGAR Form 4 · Open-market purchases (Code P) only · {trades.length} transactions shown
       </div>
       </> : null}
+
+      {/* Footer */}
+      <div style={{ borderTop:'0.5px solid #e5e7eb', marginTop:24, padding:'14px 16px', display:'flex', gap:16, justifyContent:'center', alignItems:'center' }}>
+        <button onClick={onTerms} style={{ background:'none', border:'none', fontSize:11, color:'#9ca3af', cursor:'pointer', textDecoration:'underline' }}>Terms of Use</button>
+        <span style={{ color:'#e5e7eb', fontSize:11 }}>·</span>
+        <button onClick={onDisclaimer} style={{ background:'none', border:'none', fontSize:11, color:'#9ca3af', cursor:'pointer', textDecoration:'underline' }}>Disclaimer</button>
+        <span style={{ color:'#e5e7eb', fontSize:11 }}>·</span>
+        <a href="mailto:support@itasinc.net" style={{ fontSize:11, color:'#9ca3af' }}>support@itasinc.net</a>
+        <span style={{ color:'#e5e7eb', fontSize:11 }}>·</span>
+        <span style={{ fontSize:11, color:'#d1d5db' }}>© 2026 ITAS Inc</span>
+      </div>
     </div>
   );
 }

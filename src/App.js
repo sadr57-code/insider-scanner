@@ -104,7 +104,7 @@ export default function App() {
     );
   }
 
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} onTerms={() => setShowTerms(true)} onDisclaimer={() => setShowDisclaimer(true)} />;
 
   return (
     <>
@@ -112,6 +112,8 @@ export default function App() {
         user={user}
         onLogout={handleLogout}
         onAdmin={() => setShowAdmin(true)}
+        onTerms={() => setShowTerms(true)}
+        onDisclaimer={() => setShowDisclaimer(true)}
       />
       {showAdmin && (
         <AdminPanel onClose={() => setShowAdmin(false)} />

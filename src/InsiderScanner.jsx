@@ -80,12 +80,12 @@ const FEED_TICKERS = new Set([
 
 
 // ── CongressTab ──────────────────────────────────────────────────────────────
-function CongressTab() {
-  const [trades,    setTrades]   = useState([]);
-  const [loading,   setLoading]  = useState(false);
-  const [error,     setError]    = useState('');
-  const [source,    setSource]   = useState(null);
-  const [fetchedAt, setFetchedAt]= useState(null);
+function CongressTab({ user }) {
+  const [trades,      setTrades]      = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
+  const [source,      setSource]      = useState(null);
+  const [fetchedAt,   setFetchedAt]   = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [cacheSource, setCacheSource] = useState(null);
 
@@ -427,6 +427,247 @@ function CongressTab() {
   );
 }
 
+// ── AlertModal ────────────────────────────────────────────────────────────────
+function AlertModal({ user, onClose }) {
+  const isPaid = user && ['pro','basic','owner'].includes((user.role||'').toLowerCase());
+
+  const [tab,         setTab]         = useState('both');        // 'corporate' | 'congress' | 'both'
+  const [symbolInput, setSymbolInput] = useState('');
+  const [symbols,     setSymbols]     = useState([]);
+  const [minAmount,   setMinAmount]   = useState('100000');
+  const [expiry,      setExpiry]      = useState('3');           // months
+  const [existing,    setExisting]    = useState([]);            // current alert configs from Redis
+  const [saving,      setSaving]      = useState(false);
+  const [saved,       setSaved]       = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(true);
+  const [removeLoading,   setRemoveLoading]   = useState(null);
+
+  // Load existing alerts on mount
+  useEffect(() => {
+    if (!isPaid || !user?.uid) { setLoadingExisting(false); return; }
+    fetch(`/api/alerts?action=list&uid=${user.uid}`)
+      .then(r => r.json())
+      .then(d => { if (d.ok) setExisting(d.alerts || []); })
+      .catch(() => {})
+      .finally(() => setLoadingExisting(false));
+  }, [user?.uid, isPaid]); // eslint-disable-line
+
+  function addSymbol(raw) {
+    const syms = raw.toUpperCase().split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+    setSymbols(prev => [...new Set([...prev, ...syms])]);
+    setSymbolInput('');
+  }
+
+  function removeSymbol(sym) {
+    setSymbols(prev => prev.filter(s => s !== sym));
+  }
+
+  async function handleSave() {
+    if (!symbols.length) return;
+    setSaving(true); setSaved(false);
+    try {
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + parseInt(expiry));
+      const res = await fetch('/api/alerts?action=add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: user.uid,
+          tickers: symbols,
+          feed: tab,
+          minAmount: parseInt(minAmount),
+          expiresAt: expiresAt.toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setExisting(data.alerts || []);
+        setSymbols([]);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } catch {}
+    setSaving(false);
+  }
+
+  async function handleRemove(alertId) {
+    setRemoveLoading(alertId);
+    try {
+      const res = await fetch('/api/alerts?action=remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid, alertId }),
+      });
+      const data = await res.json();
+      if (data.ok) setExisting(data.alerts || []);
+    } catch {}
+    setRemoveLoading(null);
+  }
+
+  const overlayStyle = {
+    position:'fixed', inset:0, background:'rgba(0,0,0,0.45)',
+    zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center',
+  };
+  const modalStyle = {
+    background:'#fff', borderRadius:16, padding:'28px 28px 24px',
+    width:'100%', maxWidth:520, boxShadow:'0 20px 60px rgba(0,0,0,0.18)',
+    maxHeight:'90vh', overflowY:'auto',
+  };
+  const tabBtnStyle = (active) => ({
+    flex:1, padding:'7px 0', fontSize:12, fontWeight: active ? 600 : 400,
+    border:'0.5px solid #e5e7eb', cursor:'pointer',
+    background: active ? '#1d4ed8' : '#f9fafb',
+    color: active ? '#fff' : '#6b7280',
+  });
+  const inputStyle = {
+    width:'100%', padding:'8px 10px', fontSize:13, border:'0.5px solid #d1d5db',
+    borderRadius:8, outline:'none', boxSizing:'border-box',
+  };
+  const selStyle = {
+    padding:'8px 10px', fontSize:13, border:'0.5px solid #d1d5db',
+    borderRadius:8, background:'#fff', color:'#111827', flex:1,
+  };
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={modalStyle} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:16 }}>🔔 Email Alerts</div>
+            <div style={{ fontSize:11, color:'#9ca3af', marginTop:2 }}>Get notified when insiders trade your symbols</div>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, cursor:'pointer', color:'#9ca3af', padding:'0 4px' }}>✕</button>
+        </div>
+
+        {!isPaid ? (
+          /* Upsell for trial users */
+          <div style={{ textAlign:'center', padding:'24px 0' }}>
+            <div style={{ fontSize:32, marginBottom:12 }}>🔒</div>
+            <div style={{ fontWeight:600, fontSize:14, marginBottom:8 }}>Alerts require a paid plan</div>
+            <div style={{ fontSize:12, color:'#6b7280', lineHeight:1.6 }}>
+              Upgrade to Basic or Pro to set up email alerts for insider and congress trades.
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Feed tab selector */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, color:'#6b7280', marginBottom:6, fontWeight:500 }}>WATCH IN</div>
+              <div style={{ display:'flex', borderRadius:8, overflow:'hidden', border:'0.5px solid #e5e7eb' }}>
+                <button style={tabBtnStyle(tab==='corporate')} onClick={() => setTab('corporate')}>📊 Corporate</button>
+                <button style={{ ...tabBtnStyle(tab==='congress'), borderLeft:'none', borderRight:'none' }} onClick={() => setTab('congress')}>🏛 Congress</button>
+                <button style={tabBtnStyle(tab==='both')} onClick={() => setTab('both')}>⚡ Both</button>
+              </div>
+            </div>
+
+            {/* Symbol input */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, color:'#6b7280', marginBottom:6, fontWeight:500 }}>SYMBOLS</div>
+              <div style={{ display:'flex', gap:6 }}>
+                <input
+                  value={symbolInput}
+                  onChange={e => setSymbolInput(e.target.value.toUpperCase())}
+                  onKeyDown={e => { if (e.key==='Enter'||e.key===',') { e.preventDefault(); addSymbol(symbolInput); } }}
+                  placeholder="AAPL, NVDA, TSLA…"
+                  style={{ ...inputStyle, flex:1 }}
+                />
+                <button
+                  onClick={() => addSymbol(symbolInput)}
+                  style={{ padding:'8px 14px', background:'#1d4ed8', color:'#fff', border:'none', borderRadius:8, fontSize:13, cursor:'pointer', whiteSpace:'nowrap' }}
+                >Add</button>
+              </div>
+              <div style={{ fontSize:10, color:'#9ca3af', marginTop:4 }}>Separate multiple tickers with comma or Enter</div>
+              {symbols.length > 0 && (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:10 }}>
+                  {symbols.map(sym => (
+                    <span key={sym} style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#dbeafe', color:'#1e40af', fontSize:12, fontWeight:600, padding:'3px 10px', borderRadius:20 }}>
+                      {sym}
+                      <span onClick={() => removeSymbol(sym)} style={{ cursor:'pointer', opacity:.6, fontSize:13, lineHeight:1 }}>✕</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Threshold + Expiry */}
+            <div style={{ display:'flex', gap:12, marginBottom:20 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:11, color:'#6b7280', marginBottom:6, fontWeight:500 }}>MIN TRADE AMOUNT</div>
+                <select style={selStyle} value={minAmount} onChange={e => setMinAmount(e.target.value)}>
+                  <option value="0">Any amount</option>
+                  <option value="15000">$15K+</option>
+                  <option value="50000">$50K+</option>
+                  <option value="100000">$100K+</option>
+                  <option value="500000">$500K+</option>
+                  <option value="1000000">$1M+</option>
+                </select>
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:11, color:'#6b7280', marginBottom:6, fontWeight:500 }}>ALERT DURATION</div>
+                <select style={selStyle} value={expiry} onChange={e => setExpiry(e.target.value)}>
+                  <option value="3">3 months</option>
+                  <option value="6">6 months</option>
+                  <option value="12">12 months</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Save button */}
+            <button
+              onClick={handleSave}
+              disabled={saving || symbols.length === 0}
+              style={{
+                width:'100%', padding:'11px', fontSize:14, fontWeight:600,
+                background: symbols.length === 0 ? '#e5e7eb' : '#1d4ed8',
+                color: symbols.length === 0 ? '#9ca3af' : '#fff',
+                border:'none', borderRadius:9, cursor: symbols.length === 0 ? 'default' : 'pointer',
+                marginBottom: saved ? 10 : 0,
+              }}
+            >
+              {saving ? 'Saving…' : `Set Alert${symbols.length > 1 ? 's' : ''} for ${symbols.length || '—'} ticker${symbols.length !== 1 ? 's' : ''}`}
+            </button>
+            {saved && (
+              <div style={{ textAlign:'center', fontSize:12, color:'#065f46', background:'#d1fae5', borderRadius:8, padding:'8px', marginTop:8 }}>
+                ✓ Alerts saved — you'll receive emails at <strong>{user.email || 'your email on file'}</strong>
+              </div>
+            )}
+
+            {/* Existing alerts */}
+            {!loadingExisting && existing.length > 0 && (
+              <div style={{ marginTop:24, borderTop:'0.5px solid #e5e7eb', paddingTop:16 }}>
+                <div style={{ fontSize:11, color:'#6b7280', fontWeight:500, marginBottom:10 }}>ACTIVE ALERTS</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {existing.map(a => (
+                    <div key={a.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f9fafb', border:'0.5px solid #e5e7eb', borderRadius:8, padding:'8px 12px' }}>
+                      <div>
+                        <div style={{ fontWeight:600, fontSize:13, color:'#1d4ed8' }}>{a.tickers?.join(', ') || a.ticker}</div>
+                        <div style={{ fontSize:11, color:'#9ca3af', marginTop:2 }}>
+                          {a.feed === 'corporate' ? '📊 Corporate' : a.feed === 'congress' ? '🏛 Congress' : '⚡ Both'} ·
+                          {a.minAmount > 0 ? ` $${(a.minAmount/1000).toFixed(0)}K+` : ' Any amount'} ·
+                          Expires {new Date(a.expiresAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemove(a.id)}
+                        disabled={removeLoading === a.id}
+                        style={{ background:'none', border:'0.5px solid #fca5a5', borderRadius:6, color:'#dc2626', fontSize:11, cursor:'pointer', padding:'3px 8px' }}
+                      >
+                        {removeLoading === a.id ? '…' : 'Remove'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDisclaimer }) {
   const [trades,    setTrades]   = useState([]);
   const [meta,      setMeta]     = useState({});
@@ -437,6 +678,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
 
   // Filters
   const [activeTab, setActiveTab] = useState('insider'); // 'insider' | 'congress'
+  const [showAlertModal, setShowAlertModal] = useState(false);
   const [days,      setDays]     = useState(7);
   const [industry,  setIndustry] = useState('All');
   const [role,      setRole]     = useState('All');
@@ -571,6 +813,8 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
   return (
     <div style={{ fontFamily:'system-ui,-apple-system,sans-serif', fontSize:13, color:'#111827', maxWidth:1280, margin:'0 auto', padding:'0 12px 32px' }}>
 
+      {showAlertModal && <AlertModal user={user} onClose={() => setShowAlertModal(false)} />}
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={headerStyle}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -594,6 +838,10 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
           <button style={btnStyle} onClick={() => fetchTrades({ refresh: true })} disabled={loading}>
             {loading ? '…' : '↻ Refresh'}
           </button>
+          <button
+            style={{ ...btnStyle, background:'#fefce8', border:'0.5px solid #fcd34d', color:'#92400e', fontWeight:500 }}
+            onClick={() => setShowAlertModal(true)}
+          >🔔 Alerts</button>
           {(user?.role === 'owner') && (
             <button
               style={{ ...btnStyle, background:'#1d4ed8', color:'#fff', border:'none', fontWeight:500 }}
@@ -686,7 +934,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
         );
       })()}
 
-      {activeTab === 'congress' ? <CongressTab /> : null}
+      {activeTab === 'congress' ? <CongressTab user={user} /> : null}
       {activeTab === 'insider' && ['pro', 'trial', 'owner'].includes(user?.role) ? <>
       {/* ── Filters ────────────────────────────────────────────────────────── */}
       <div style={{ background:'#f9fafb', borderBottom:'0.5px solid #e5e7eb', padding:'10px 16px', display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>

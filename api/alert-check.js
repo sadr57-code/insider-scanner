@@ -1,28 +1,20 @@
-// api/alert-check.js — Cron: check new insider trades vs user alert subscriptions
+// api/alert-check.js — Cron: check new trades vs user alert configs
 //
 // Add to vercel.json crons:
-//   { "path": "/api/alert-check", "schedule": "0 */2 * * *" }   ← every 2 hours
-//
-// Flow:
-//   1. Load all users
-//   2. For each paid user with alerts, get their ticker list
-//   3. Fetch current insider trades from Redis cache
-//   4. For each subscribed ticker, find trades not yet sent
-//   5. Send email via /api/alerts?action=send
-//   6. Mark trades as sent in Redis (72hr dedup TTL)
+//   { "path": "/api/alert-check", "schedule": "0 */2 * * *" }
 //
 // Env vars required:
 //   UPSTASH_REDIS_REST_URL
 //   UPSTASH_REDIS_REST_TOKEN
-//   CRON_SECRET   — optional, set in Vercel env to protect this endpoint
+//   CRON_SECRET
 
-const REDIS_URL    = process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN  = process.env.UPSTASH_REDIS_REST_TOKEN;
-const CRON_SECRET  = process.env.CRON_SECRET || '';
-const USERS_KEY    = 'insider:users';
-const TRADES_CACHE = 'congress:feed:latest';    // adjust to match your actual Redis key
+const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const CRON_SECRET = process.env.CRON_SECRET || '';
+const USERS_KEY   = 'insider:users';
+const CONGRESS_CACHE = 'congress:feed:v4:latest';   // matches api/congress.js CACHE_KEY
+const INSIDER_CACHE  = 'insider:trades:cache';       // adjust if different
 
-// ─── Redis helpers ────────────────────────────────────────────────────────────
 async function redisGet(key) {
   try {
     const res = await fetch(`${REDIS_URL}/get/${encodeURIComponent(key)}`, {
@@ -53,29 +45,36 @@ async function redisExists(key) {
   } catch { return false; }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function isPaidUser(user) {
-  return user && ['pro', 'basic', 'owner'].includes(user.role?.toLowerCase());
+function isPaidUser(u) {
+  return u && ['pro','basic','owner'].includes(u.role?.toLowerCase());
 }
 
-function alertsKey(uid)              { return `insider:alerts:${uid}`; }
-function sentKey(uid, ticker, tradeId) { return `insider:alerts:sent:${uid}:${ticker}:${tradeId}`; }
+function alertConfigsKey(uid) { return `insider:alertconfigs:${uid}`; }
+function sentKey(uid, ticker, id) { return `insider:alerts:sent:${uid}:${ticker}:${id}`; }
 
-// Unique ID for a trade — use congress-seed normalized fields
 function tradeId(trade) {
-  // congress-seed already generates an id field: `${politician_name}-${ticker}-${tradeDate}`
-  if (trade.id) return trade.id.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 80);
-  const parts = [trade.tradeDate || '', trade.representative || '', trade.ticker || ''];
-  return parts.join('_').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 80);
+  if (trade.id) return String(trade.id).replace(/[^a-zA-Z0-9_\-]/g,'').slice(0,80);
+  return [trade.tradeDate||trade.date||'', trade.representative||trade.insider||'', trade.ticker||trade.symbol||'']
+    .join('_').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9_\-]/g,'').slice(0,80);
 }
 
-// Send email via alerts.js action=send (internal call)
-async function triggerSendAlert(uid, ticker, trades, baseUrl) {
+function meetsThreshold(trade, minAmount) {
+  if (!minAmount || minAmount <= 0) return true;
+  const amt = trade.amount || trade.value || 0;
+  return Number(amt) >= minAmount;
+}
+
+function pruneExpired(alerts) {
+  const now = new Date();
+  return (alerts || []).filter(a => !a.expiresAt || new Date(a.expiresAt) > now);
+}
+
+async function triggerSendAlert(uid, ticker, trades, feed, baseUrl) {
   try {
     const res = await fetch(`${baseUrl}/api/alerts?action=send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid, ticker, trades }),
+      body: JSON.stringify({ uid, ticker, trades, feed }),
     });
     return await res.json();
   } catch (err) {
@@ -83,82 +82,77 @@ async function triggerSendAlert(uid, ticker, trades, baseUrl) {
   }
 }
 
-// ─── Main handler ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  // Optional: protect with a secret header
   if (CRON_SECRET) {
     const authHeader = req.headers['authorization'] || '';
-    if (authHeader !== `Bearer ${CRON_SECRET}`) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
+    if (authHeader !== `Bearer ${CRON_SECRET}`) return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 
-  // Determine base URL for internal alert send call
-  const host = req.headers['x-forwarded-host'] || req.headers.host || 'insider-scanner-tan.vercel.app';
-  const proto = host.includes('localhost') ? 'http' : 'https';
+  const host    = req.headers['x-forwarded-host'] || req.headers.host || 'insider-scanner-tan.vercel.app';
+  const proto   = host.includes('localhost') ? 'http' : 'https';
   const baseUrl = `${proto}://${host}`;
 
   try {
-    // 1. Load users
-    const users = (await redisGet(USERS_KEY)) || [];
+    const users     = (await redisGet(USERS_KEY)) || [];
     const paidUsers = users.filter(u => isPaidUser(u) && u.email && u.active !== false);
+    if (!paidUsers.length) return res.status(200).json({ ok: true, message: 'No paid users with email' });
 
-    if (!paidUsers.length) {
-      return res.status(200).json({ ok: true, message: 'No paid users with email' });
-    }
+    // Load trade caches
+    const congressTrades = (await redisGet(CONGRESS_CACHE)) || [];
+    const insiderTrades  = (await redisGet(INSIDER_CACHE))  || [];
 
-    // 2. Load current trades from Redis cache
-    // NOTE: adjust TRADES_CACHE key to match what your congress-fetch / insider API stores
-    const cachedData = await redisGet(TRADES_CACHE);
-    const allTrades = Array.isArray(cachedData) ? cachedData
-                    : cachedData?.trades ? cachedData.trades
-                    : [];
-
-    if (!allTrades.length) {
-      return res.status(200).json({ ok: true, message: 'No trades in cache' });
-    }
-
-    // 3. Process each paid user
     const results = [];
+
     for (const user of paidUsers) {
-      const tickers = (await redisGet(alertsKey(user.id))) || [];
-      if (!tickers.length) continue;
+      const raw     = (await redisGet(alertConfigsKey(user.id))) || [];
+      const configs = pruneExpired(raw);
+      if (!configs.length) continue;
 
-      for (const ticker of tickers) {
-        // Find trades for this ticker (field: ticker from congress-seed normalizer)
-        const tickerTrades = allTrades.filter(t =>
-          (t.ticker || '').toUpperCase() === ticker
-        );
-        if (!tickerTrades.length) continue;
+      // Save back pruned list if any expired
+      if (configs.length !== raw.length) await redisSet(alertConfigsKey(user.id), configs);
 
-        // Filter to unsent trades
-        const newTrades = [];
-        for (const trade of tickerTrades) {
-          const key = sentKey(user.id, ticker, tradeId(trade));
-          const alreadySent = await redisExists(key);
-          if (!alreadySent) newTrades.push(trade);
-        }
+      for (const config of configs) {
+        const { tickers = [], feed = 'both', minAmount = 0 } = config;
 
-        if (!newTrades.length) continue;
+        // Determine which trade sets to check
+        const tradeSets = [];
+        if (feed === 'congress' || feed === 'both') tradeSets.push({ trades: congressTrades, feedName: 'congress' });
+        if (feed === 'corporate' || feed === 'both') tradeSets.push({ trades: insiderTrades,  feedName: 'corporate' });
 
-        // Send email
-        const sendResult = await triggerSendAlert(user.id, ticker, newTrades, baseUrl);
+        for (const ticker of tickers) {
+          const sym = ticker.toUpperCase();
 
-        if (sendResult.ok) {
-          // Mark all as sent (72hr dedup window)
-          for (const trade of newTrades) {
-            const key = sentKey(user.id, ticker, tradeId(trade));
-            await redisSet(key, 1, 72 * 3600);
+          for (const { trades: allTrades, feedName } of tradeSets) {
+            const tickerTrades = allTrades.filter(t =>
+              (t.ticker || t.symbol || '').toUpperCase() === sym
+            );
+            if (!tickerTrades.length) continue;
+
+            // Filter by threshold + dedup
+            const newTrades = [];
+            for (const trade of tickerTrades) {
+              if (!meetsThreshold(trade, minAmount)) continue;
+              const key       = sentKey(user.id, sym, tradeId(trade));
+              const alreadySent = await redisExists(key);
+              if (!alreadySent) newTrades.push(trade);
+            }
+            if (!newTrades.length) continue;
+
+            const sendResult = await triggerSendAlert(user.id, sym, newTrades, feedName, baseUrl);
+            if (sendResult.ok) {
+              for (const trade of newTrades) {
+                await redisSet(sentKey(user.id, sym, tradeId(trade)), 1, 72 * 3600);
+              }
+              results.push({ uid: user.id, ticker: sym, feed: feedName, sent: newTrades.length });
+            } else {
+              results.push({ uid: user.id, ticker: sym, feed: feedName, error: sendResult.error });
+            }
           }
-          results.push({ uid: user.id, ticker, sent: newTrades.length });
-        } else {
-          results.push({ uid: user.id, ticker, error: sendResult.error });
         }
       }
     }
 
     return res.status(200).json({ ok: true, processed: results });
-
   } catch (err) {
     console.error('alert-check error:', err);
     return res.status(500).json({ ok: false, error: err.message });

@@ -427,6 +427,116 @@ function CongressTab({ user }) {
   );
 }
 
+// ── SignalBreakdown ───────────────────────────────────────────────────────────
+function SignalBreakdown({ t }) {
+  const [open, setOpen] = useState(false);
+
+  // Build scored factors from trade fields
+  function buildFactors(t) {
+    const factors = [];
+
+    // Role-based points
+    const role = (t.role || '').toUpperCase();
+    if (role.includes('CEO'))                           factors.push({ label: 'CEO purchase',         pts: 30,  pass: true });
+    else if (role.includes('CFO'))                      factors.push({ label: 'CFO purchase',         pts: 25,  pass: true });
+    else if (role.includes('COO') || role.includes('PRESIDENT')) factors.push({ label: `${t.role} purchase`, pts: 20, pass: true });
+    else if (role.includes('EVP') || role.includes('SVP'))       factors.push({ label: `${t.role} purchase`, pts: 15, pass: true });
+    else if (role.includes('DIRECTOR'))                 factors.push({ label: 'Director purchase',    pts: 10,  pass: true });
+    else if (role.includes('10%') || role.includes('OWNER'))     factors.push({ label: '10% owner purchase', pts: 10, pass: true });
+    else if (t.role)                                    factors.push({ label: `${t.role} purchase`,   pts: 5,   pass: true });
+
+    // Amount-based points
+    const amt = t.amount || 0;
+    if (amt >= 1000000)      factors.push({ label: '$1M+ transaction',   pts: 20, pass: true });
+    else if (amt >= 500000)  factors.push({ label: '$500K+ transaction', pts: 15, pass: true });
+    else if (amt >= 100000)  factors.push({ label: '$100K+ transaction', pts: 10, pass: true });
+    else if (amt >= 50000)   factors.push({ label: '$50K+ transaction',  pts: 5,  pass: true });
+
+    // Cluster
+    const cluster = t.cluster || 1;
+    if (cluster >= 4)       factors.push({ label: `Cluster: ${cluster} insiders buying`, pts: 15, pass: true });
+    else if (cluster >= 2)  factors.push({ label: `Cluster: ${cluster} insiders buying`, pts: 8,  pass: true });
+
+    // Direct ownership
+    if (t.directOwnership)  factors.push({ label: 'Direct ownership',   pts: 5,  pass: true });
+
+    // 52W low proximity
+    if (t.vs52Low != null) {
+      if (t.vs52Low <= 10)   factors.push({ label: 'Near 52-week low',   pts: 10, pass: true });
+      else if (t.vs52Low <= 25) factors.push({ label: 'Within 25% of 52W low', pts: 5, pass: true });
+    }
+
+    // Deductions
+    if (t.is10b51)          factors.push({ label: '10b5-1 plan (pre-scheduled)', pts: -15, pass: false });
+    if (!t.directOwnership) factors.push({ label: 'Indirect ownership',  pts: -5, pass: false });
+
+    return factors;
+  }
+
+  const factors = buildFactors(t);
+  const calcScore = factors.reduce((sum, f) => sum + f.pts, 0);
+  const displayScore = t.signalScore ?? calcScore;
+  const signalMap = { Strong: '🔥', Moderate: '📈', Weak: '—' };
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'none', border: '0.5px solid #e5e7eb', borderRadius: 7,
+          padding: '5px 12px', fontSize: 12, fontWeight: 600,
+          color: '#1d4ed8', cursor: 'pointer', marginBottom: open ? 10 : 0,
+        }}
+      >
+        🔍 Why this signal?
+        <span style={{ fontSize: 10, opacity: .6, transition: 'transform .2s', display: 'inline-block', transform: open ? 'rotate(180deg)' : '' }}>▾</span>
+      </button>
+
+      {open && (
+        <div style={{ background: '#fff', border: '0.5px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', fontSize: 12 }}>
+          {/* Factor rows */}
+          {factors.map((f, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '7px 14px',
+              borderBottom: i < factors.length - 1 ? '0.5px solid #f3f4f6' : 'none',
+              background: i % 2 === 0 ? '#fff' : '#fafafa',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13 }}>{f.pass ? '✅' : '❌'}</span>
+                <span style={{ color: '#374151' }}>{f.label}</span>
+              </div>
+              <span style={{
+                fontWeight: 700, fontSize: 12, minWidth: 54, textAlign: 'right',
+                color: f.pts > 0 ? '#065f46' : '#dc2626',
+              }}>
+                {f.pts > 0 ? `+${f.pts}` : f.pts} pts
+              </span>
+            </div>
+          ))}
+
+          {/* Total row */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '9px 14px', background: '#f0fdf4', borderTop: '1.5px solid #bbf7d0',
+          }}>
+            <span style={{ fontWeight: 700, color: '#111827', fontSize: 13 }}>Total Score</span>
+            <span style={{ fontWeight: 700, fontSize: 14, color: displayScore >= 60 ? '#065f46' : displayScore >= 35 ? '#92400e' : '#6b7280' }}>
+              {displayScore} → {t.signal || 'Moderate'} {signalMap[t.signal] || ''}
+            </span>
+          </div>
+
+          {/* Disclaimer */}
+          <div style={{ padding: '8px 14px', background: '#fffbeb', borderTop: '0.5px solid #fde68a', fontSize: 10, color: '#92400e', lineHeight: 1.5 }}>
+            ⚠ <strong>For informational purposes only.</strong> Insider activity is one data point — not a buy/sell recommendation. Always conduct your own research before making any trading decisions.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── AlertModal ────────────────────────────────────────────────────────────────
 function AlertModal({ user, onClose }) {
   const isPaid = user && ['pro','basic','owner'].includes((user.role||'').toLowerCase());
@@ -1108,6 +1218,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
                             {t.signalReasons.join(' · ')}
                           </div>
                         )}
+                        <SignalBreakdown t={t} />
                         <div style={{ display:'flex', gap:8, marginTop:10 }}>
                           <a
                             href={`https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=${encodeURIComponent(t.company||'')}&type=4&dateb=&owner=include&count=10`}

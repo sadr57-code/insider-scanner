@@ -35,7 +35,7 @@ export default function TermsPage({ onBack }) {
         )}
 
         <div style={s.h1}>Terms of Use</div>
-        <div style={s.meta}>ITAS Inc · Last updated: June 8, 2026</div>
+        <div style={s.meta}>ITAS Inc · Last updated: June 9, 2026</div>
 
         <p style={s.p}>
           These Terms of Use ("Terms") govern your access to and use of Insider Scanner, a financial data
@@ -57,14 +57,31 @@ export default function TermsPage({ onBack }) {
           plans are currently offered:
         </p>
         <ul style={s.ul}>
-          <li style={s.li}><strong>Trial:</strong> 30-day free access, activated by administrator approval. No credit card required.</li>
-          <li style={s.li}><strong>Basic:</strong> $19.00 USD per month. Includes access to Congress Trades data and core features.</li>
-          <li style={s.li}><strong>Pro:</strong> $149.00 USD per year. Includes full access to Corporate Insiders (SEC Form 4) data and all features.</li>
+          <li style={s.li}><strong>Trial:</strong> 14-day free access, self-serve signup. No credit card required.</li>
+          <li style={s.li}><strong>Basic:</strong> $29.00 USD per month. Includes access to Congress Trades data and core features.</li>
+          <li style={s.li}><strong>Pro:</strong> $199.00 USD per year. Includes full access to Corporate Insiders (SEC Form 4) data and all features.</li>
+          <li style={s.li}><strong>Founder Annual:</strong> $199.00 USD per year, rate locked permanently for qualifying Founder members.</li>
+          <li style={s.li}><strong>Platinum Founder:</strong> $1,499.00 USD one-time. See Section 2a below.</li>
         </ul>
         <p style={s.p}>
           Payments are processed securely through PayPal. By completing a purchase, you authorize
           ITAS Inc to charge your payment method for the selected plan. All prices are in U.S. dollars.
         </p>
+
+        <div style={s.h2}>2a. Founder Membership &amp; Platinum Founder Terms</div>
+        <p style={s.p}>
+          LionBlade Founder Membership ("Founder" or "Platinum Founder") is a limited offering extended
+          personally by ITAS Inc to a capped cohort of early members (maximum 59 slots). The following
+          terms apply specifically to Founder memberships:
+        </p>
+        <ul style={s.ul}>
+          <li style={s.li}><strong>Platform Lifetime, Not Personal Lifetime.</strong> "Lifetime access" means access for the operational lifetime of the LionBlade platform — not a personal lifetime guarantee. Access continues for as long as the LionBlade service remains active and operational under ITAS Inc.</li>
+          <li style={s.li}><strong>Locked Pricing.</strong> Founder and Platinum Founder rates will not increase for qualifying members, subject to the platform remaining active. ITAS Inc reserves the right to make reasonable adjustments to features or pricing with a minimum of 60 days' written notice to affected members.</li>
+          <li style={s.li}><strong>Scope of Access.</strong> Platinum Founder membership includes access to all scanners currently available on the LionBlade platform and future scanners added during the platform's active lifetime. "First access" means early or beta access prior to general availability; it does not guarantee any specific feature or release timeline.</li>
+          <li style={s.li}><strong>Payment Plans.</strong> Where a 2-installment payment plan is offered (2 × $749), access is granted upon receipt of the first installment and continued upon receipt of the second. Failure to complete the payment plan results in reversion to standard paid access for the period already paid.</li>
+          <li style={s.li}><strong>Non-Transferable.</strong> Founder memberships are personal and non-transferable. They may not be sold, gifted, or assigned to another party.</li>
+          <li style={s.li}><strong>Service Discontinuation.</strong> In the event ITAS Inc discontinues the LionBlade platform, Platinum Founders will receive a minimum of 90 days' advance notice and a pro-rated refund based on months remaining from the date of notice, calculated against a 60-month (5-year) service baseline.</li>
+        </ul>
 
         <div style={s.h2}>3. Refund Policy</div>
         <p style={s.p}>

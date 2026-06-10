@@ -863,6 +863,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
   }, [days, industry, role, minAmount, signal, minScore, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchTrades(); }, [fetchTrades]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { document.title = 'LionBlade | Insider Scanner'; }, []);
 
   // ── Filter change helpers ──────────────────────────────────────────────────
   function setAndFetch(setter, key, val) {
@@ -928,9 +929,17 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={headerStyle}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <span style={{ fontSize:18 }}>📊</span>
+          <img src="/LionBlade_logo.png" alt="LionBlade" style={{ width:36, height:36, borderRadius:8, objectFit:'contain' }} />
           <div>
-            <div style={{ fontWeight:700, fontSize:14 }}>Insider Scanner</div>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <div style={{ fontWeight:700, fontSize:14 }}>LionBlade Insider</div>
+              {user?.role === 'platinum' && (
+                <span style={{ fontSize:10, fontWeight:700, background:'linear-gradient(135deg,#b8860b,#ffd700)', color:'#fff', padding:'2px 7px', borderRadius:20, letterSpacing:'0.5px' }}>PLATINUM</span>
+              )}
+              {user?.role === 'owner' && (
+                <span style={{ fontSize:10, fontWeight:700, background:'#111827', color:'#facc15', padding:'2px 7px', borderRadius:20, letterSpacing:'0.5px' }}>OWNER</span>
+              )}
+            </div>
             <div style={{ fontSize:10, color:'#9ca3af' }}>SEC Form 4 · Open-Market Purchases Only</div>
           </div>
         </div>

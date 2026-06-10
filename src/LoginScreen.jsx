@@ -172,8 +172,8 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
 
           {/* Header */}
           <div style={{ textAlign:'center', marginBottom:24 }}>
-            <div style={{ width:48, height:48, borderRadius:12, background:'#1d4ed8', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:22, marginBottom:10 }}>📊</div>
-            <div style={{ fontSize:18, fontWeight:700, color:'#111827' }}>Start Free Trial</div>
+            <img src="/LionBlade_logo.png" alt="LionBlade" style={{ width:56, height:56, borderRadius:12, objectFit:'contain', marginBottom:10 }} />
+            <div style={{ fontSize:18, fontWeight:700, color:'#111827' }}>LionBlade Insider</div>
             <div style={{ fontSize:12, color:'#9ca3af', marginTop:4 }}>14 days · No credit card required</div>
           </div>
 
@@ -265,12 +265,8 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 12, background: '#1d4ed8',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, marginBottom: 10,
-          }}>📊</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>Insider Scanner</div>
+          <img src="/LionBlade_logo.png" alt="LionBlade" style={{ width:56, height:56, borderRadius:12, objectFit:'contain', marginBottom:10 }} />
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>LionBlade Insider</div>
           <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>SEC Form 4 Signal Tracker</div>
         </div>
 

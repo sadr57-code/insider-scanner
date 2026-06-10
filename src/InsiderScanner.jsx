@@ -863,7 +863,6 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
   }, [days, industry, role, minAmount, signal, minScore, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchTrades(); }, [fetchTrades]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { document.title = 'LionBlade | Insider Scanner'; }, []);
 
   // ── Filter change helpers ──────────────────────────────────────────────────
   function setAndFetch(setter, key, val) {
@@ -934,7 +933,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
               <div style={{ fontWeight:700, fontSize:14 }}>LionBlade Insider</div>
               {user?.role === 'platinum' && (
-                <span style={{ fontSize:10, fontWeight:700, background:'linear-gradient(135deg,#b8860b,#ffd700)', color:'#fff', padding:'2px 7px', borderRadius:20, letterSpacing:'0.5px' }}>PLATINUM</span>
+                <span style={{ fontSize:10, fontWeight:700, background:'#111827', padding:'2px 8px', borderRadius:20, letterSpacing:'0.5px', backgroundImage:'linear-gradient(135deg,#b8860b,#ffd700)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', border:'0.5px solid #b8860b' }}>PLATINUM</span>
               )}
               {user?.role === 'owner' && (
                 <span style={{ fontSize:10, fontWeight:700, background:'#111827', color:'#facc15', padding:'2px 7px', borderRadius:20, letterSpacing:'0.5px' }}>OWNER</span>

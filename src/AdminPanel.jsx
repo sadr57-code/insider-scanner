@@ -372,7 +372,11 @@ export default function AdminPanel({ onClose }) {
                             </td>
                             <td style={{ ...s.td, color: '#1d4ed8' }}>{u.email}</td>
                             <td style={s.td}>
-                              <span style={badge(u.role === 'owner' ? 'blue' : 'gray')}>{u.role || 'user'}</span>
+                              {u.role === 'platinum' ? (
+                                <span style={{ display:'inline-block', fontSize:11, padding:'2px 8px', borderRadius:10, border:'0.5px solid #b8860b', background:'#111827', fontWeight:700, letterSpacing:'0.5px', backgroundImage:'linear-gradient(135deg,#b8860b,#ffd700)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>PLATINUM</span>
+                              ) : (
+                                <span style={badge(u.role === 'owner' ? 'blue' : u.role === 'pro' ? 'green' : u.role === 'basic' ? 'orange' : u.role === 'trial' ? 'orange' : 'gray')}>{u.role || 'user'}</span>
+                              )}
                             </td>
                             <td style={s.td}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -459,7 +463,10 @@ export default function AdminPanel({ onClose }) {
                   <select style={s.input} value={form.role}
                     onChange={e => setForm({ ...form, role: e.target.value })}>
                     <option value="user">User (standard)</option>
-                    <option value="pro">Pro (extended filters)</option>
+                    <option value="trial">Trial (14-day)</option>
+                    <option value="basic">Basic ($29/mo)</option>
+                    <option value="pro">Pro ($199/yr)</option>
+                    <option value="platinum">Platinum Founder</option>
                     <option value="owner">Owner (full access)</option>
                   </select>
                 </div>

@@ -1,4 +1,4 @@
-{
+﻿{
   "version": 2,
   "framework": "create-react-app",
   "rewrites": [
@@ -7,12 +7,5 @@
   "crons": [
     { "path": "/api/congress-admin?action=fetch", "schedule": "0 9 * * 1-5" },
     { "path": "/api/alert-check", "schedule": "0 */2 * * *" }
-  ],
-  "functions": {
-    "api/users.js":            { "maxDuration": 10 },
-    "api/congress.js":         { "maxDuration": 10 },
-    "api/congress-admin.js":   { "maxDuration": 30 },
-    "api/alert-check.js":      { "maxDuration": 30 },
-    "api/alerts.js":           { "maxDuration": 10 }
-  }
+  ]
 }

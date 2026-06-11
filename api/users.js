@@ -253,8 +253,14 @@ export default async function handler(req, res) {
     const users = await getUsers();
 
     // Check username not taken
-    const taken = users.find(u => u.username?.toLowerCase() === username.toLowerCase());
-    if (taken) return res.status(409).json({ ok: false, error: 'Username already taken' });
+const taken = users.find(u => u.username?.toLowerCase() === username.toLowerCase());
+if (taken) return res.status(409).json({ ok: false, error: 'Username already taken' });
+
+// Block re-trial by email
+if (email?.trim()) {
+  const emailExists = users.find(u => u.email?.toLowerCase() === email.trim().toLowerCase());
+  if (emailExists) return res.status(409).json({ ok: false, error: 'An account with this email already exists. Please sign in or contact support.' });
+}
 
     // Create trial user — 14 days
     const trialExpiry = new Date();

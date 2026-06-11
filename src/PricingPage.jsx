@@ -71,17 +71,16 @@ function PayPalButton({ hostedButtonId, containerId }) {
 }
 
 function TrialSignupForm({ onLogin }) {
-  const [open, setOpen]         = useState(false);
-  const [username, setUsername] = useState('');
+  const [open, setOpen]       = useState(false);
+  const [name, setName]       = useState('');
+  const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName]         = useState('');
-  const [email, setEmail]       = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
 
   async function handleSignup() {
-    if (!username.trim() || !password.trim()) { setError('Username and password required'); return; }
-    if (!email.trim()) { setError('Email is required'); return; }
+    if (!email.trim())    { setError('Email is required'); return; }
+    if (!password.trim()) { setError('Password is required'); return; }
     setLoading(true); setError('');
     try {
       const r = await fetch('/api/users?action=signup', {
@@ -89,10 +88,9 @@ function TrialSignupForm({ onLogin }) {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          username: username.trim(),
+          email:    email.trim().toLowerCase(),
           password,
-          name: name.trim(),
-          email: email.trim().toLowerCase(),
+          name:     name.trim(),
         }),
       });
       const d = await r.json();
@@ -135,40 +133,25 @@ function TrialSignupForm({ onLogin }) {
         <label style={labelStyle}>Full Name</label>
         <input
           type="text" value={name} onChange={e => setName(e.target.value)}
-          placeholder="Your name"
-          style={inputStyle}
+          placeholder="Your name" autoFocus style={inputStyle}
         />
       </div>
       <div style={{ marginBottom: 10 }}>
         <label style={labelStyle}>Email <span style={{ color: '#ef4444' }}>*</span></label>
         <input
           type="email" value={email} onChange={e => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          style={inputStyle}
+          placeholder="you@example.com" style={inputStyle}
         />
       </div>
       <div style={{ marginBottom: 10 }}>
-        <label style={labelStyle}>Choose a username</label>
-        <input
-          type="text" value={username} onChange={e => setUsername(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSignup()}
-          placeholder="username"
-          autoFocus
-          style={inputStyle}
-        />
-      </div>
-      <div style={{ marginBottom: 10 }}>
-        <label style={labelStyle}>Set a password</label>
+        <label style={labelStyle}>Password <span style={{ color: '#ef4444' }}>*</span></label>
         <input
           type="password" value={password} onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSignup()}
-          placeholder="min 6 characters"
-          style={inputStyle}
+          placeholder="min 6 characters" style={inputStyle}
         />
       </div>
-      {error && (
-        <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 8 }}>{error}</div>
-      )}
+      {error && <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 8 }}>{error}</div>}
       <button
         onClick={handleSignup} disabled={loading}
         style={{

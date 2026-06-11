@@ -243,66 +243,115 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, accessCode: users[idx].accessCode });
   }
 
-  // ── POST /api/users?action=signup — self-serve 14-day trial ────────────────────
-  if (req.method === 'POST' && action === 'signup') {
-    const { username, password, name, email, phone } = body;
-    if (!username || !password) return res.status(400).json({ ok: false, error: 'Username and password required' });
-    if (username.length < 3) return res.status(400).json({ ok: false, error: 'Username must be at least 3 characters' });
-    if (password.length < 6) return res.status(400).json({ ok: false, error: 'Password must be at least 6 characters' });
+  function TrialSignupForm({ onLogin }) {
+  const [open, setOpen]       = useState(false);
+  const [name, setName]       = useState('');
+  const [email, setEmail]     = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
 
-    const users = await getUsers();
-
-    // Check username not taken
-// Block duplicate username (case-insensitive, also check name field)
-const taken = users.find(u =>
-  u.username?.toLowerCase() === username.trim().toLowerCase() ||
-  u.name?.toLowerCase()     === username.trim().toLowerCase()
-);
-if (taken) return res.status(409).json({ ok: false, error: 'Username already taken. Please choose a different one.' });
-
-// Block duplicate email
-if (email?.trim()) {
-  const emailExists = users.find(u => u.email?.toLowerCase() === email.trim().toLowerCase());
-  if (emailExists) return res.status(409).json({ ok: false, error: 'An account with this email already exists. Please sign in or contact support.' });
-}
-
-// Block re-trial by email
-if (email?.trim()) {
-  const emailExists = users.find(u => u.email?.toLowerCase() === email.trim().toLowerCase());
-  if (emailExists) return res.status(409).json({ ok: false, error: 'An account with this email already exists. Please sign in or contact support.' });
-}
-
-    // Create trial user — 14 days
-    const trialExpiry = new Date();
-    trialExpiry.setDate(trialExpiry.getDate() + 14);
-
-    const newUser = {
-      id:         Date.now().toString(),
-      username:   username.trim(),
-      name:       name?.trim() || username.trim(),
-      email:      email?.trim().toLowerCase() || '',
-      phone:      phone?.trim() || '',
-      role:       'trial',
-      password:   password,
-      expiresAt:  trialExpiry.toISOString(),
-      notes:      'Self-serve trial signup',
-      active:     true,
-      accessCode: generateAccessCode(),
-      createdAt:  new Date().toISOString(),
-      updatedAt:  new Date().toISOString(),
-    };
-
-    users.push(newUser);
-    await saveUsers(users);
-
-    return res.status(200).json({
-      ok: true,
-      name:      newUser.name,
-      role:      newUser.role,
-      uid:       newUser.id,
-      expiresAt: newUser.expiresAt,
-    });
+  async function handleSignup() {
+    if (!email.trim())    { setError('Email is required'); return; }
+    if (!password.trim()) { setError('Password is required'); return; }
+    setLoading(true); setError('');
+    try {
+      const r = await fetch('/api/users?action=signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email:    email.trim().toLowerCase(),
+          password,
+          name:     name.trim(),
+        }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        const userData = { name: d.name, role: d.role, uid: d.uid, expiresAt: d.expiresAt };
+        sessionStorage.setItem('insider_user', JSON.stringify(userData));
+        onLogin && onLogin(userData);
+      } else {
+        setError(d.error || 'Signup failed');
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  if (!open) return (
+    <button
+      onClick={() => setOpen(true)}
+      style={{
+        width: '100%', padding: '12px 0', borderRadius: 10,
+        fontSize: 14, fontWeight: 600, cursor: 'pointer',
+        background: '#059669', color: '#fff', border: 'none',
+      }}
+    >
+      Start Free Trial
+    </button>
+  );
+
+  const inputStyle = {
+    width: '100%', padding: '8px 10px', border: '1px solid #d1d5db',
+    borderRadius: 8, fontSize: 13, boxSizing: 'border-box',
+  };
+  const labelStyle = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4 };
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div style={{ marginBottom: 10 }}>
+        <label style={labelStyle}>Full Name</label>
+        <input
+          type="text" value={name} onChange={e => setName(e.target.value)}
+          placeholder="Your name" autoFocus style={inputStyle}
+        />
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={labelStyle}>Email <span style={{ color: '#ef4444' }}>*</span></label>
+        <input
+          type="email" value={email} onChange={e => setEmail(e.target.value)}
+          placeholder="you@example.com" style={inputStyle}
+        />
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={labelStyle}>Password <span style={{ color: '#ef4444' }}>*</span></label>
+        <input
+          type="password" value={password} onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSignup()}
+          placeholder="min 6 characters" style={inputStyle}
+        />
+      </div>
+      {error && <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 8 }}>{error}</div>}
+      <button
+        onClick={handleSignup} disabled={loading}
+        style={{
+          width: '100%', padding: '10px 0', borderRadius: 8,
+          fontSize: 13, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+          background: loading ? '#6ee7b7' : '#059669', color: '#fff', border: 'none',
+          marginBottom: 6,
+        }}
+      >
+        {loading ? 'Creating account...' : 'Create my trial account'}
+      </button>
+      <button
+        onClick={() => { setOpen(false); setError(''); }}
+        style={{
+          width: '100%', padding: '6px 0', borderRadius: 8,
+          fontSize: 12, cursor: 'pointer',
+          background: 'transparent', color: '#6b7280', border: 'none',
+        }}
+      >
+        Cancel
+      </button>
+      <div style={{ fontSize: 10, color: '#9ca3af', textAlign: 'center', marginTop: 4 }}>
+        14-day full access · No credit card needed
+      </div>
+    </div>
+  );
+}
 
   // ── POST /api/users?action=setExpiry — update expiry after payment ───────────
   if (req.method === 'POST' && action === 'setExpiry') {

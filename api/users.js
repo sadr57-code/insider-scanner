@@ -253,8 +253,18 @@ export default async function handler(req, res) {
     const users = await getUsers();
 
     // Check username not taken
-const taken = users.find(u => u.username?.toLowerCase() === username.toLowerCase());
-if (taken) return res.status(409).json({ ok: false, error: 'Username already taken' });
+// Block duplicate username (case-insensitive, also check name field)
+const taken = users.find(u =>
+  u.username?.toLowerCase() === username.trim().toLowerCase() ||
+  u.name?.toLowerCase()     === username.trim().toLowerCase()
+);
+if (taken) return res.status(409).json({ ok: false, error: 'Username already taken. Please choose a different one.' });
+
+// Block duplicate email
+if (email?.trim()) {
+  const emailExists = users.find(u => u.email?.toLowerCase() === email.trim().toLowerCase());
+  if (emailExists) return res.status(409).json({ ok: false, error: 'An account with this email already exists. Please sign in or contact support.' });
+}
 
 // Block re-trial by email
 if (email?.trim()) {

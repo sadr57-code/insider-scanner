@@ -64,9 +64,8 @@ function alertConfigsKey(uid) { return `insider:alertconfigs:${uid}`; }
 function sentKey(uid, ticker, tradeId) { return `insider:alerts:sent:${uid}:${ticker}:${tradeId}`; }
 
 function isPaidUser(user) {
-  return user && ['pro', 'basic', 'owner'].includes(user.role?.toLowerCase());
+  return user && ['pro', 'basic', 'owner', 'platinum'].includes(user.role?.toLowerCase());
 }
-
 async function parseBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string') { try { return JSON.parse(req.body); } catch { return {}; } }

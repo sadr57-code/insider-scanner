@@ -46,9 +46,7 @@ async function redisExists(key) {
 }
 
 function isPaidUser(u) {
-  return u && ['pro','basic','owner'].includes(u.role?.toLowerCase());
-}
-
+  return u && ['pro','basic','owner','platinum'].includes(u.role?.toLowerCase());
 function alertConfigsKey(uid) { return `insider:alertconfigs:${uid}`; }
 function sentKey(uid, ticker, id) { return `insider:alerts:sent:${uid}:${ticker}:${id}`; }
 

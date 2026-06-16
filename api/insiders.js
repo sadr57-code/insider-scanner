@@ -60,6 +60,7 @@ async function fetchOpenInsider(days) {
       filDate:         strip(tdBlocks[1]||'').split(' ')[0],
       is10b51:         false,
       directOwnership: true,
+      transaction: 'Buy',
     });
   }
   return trades;

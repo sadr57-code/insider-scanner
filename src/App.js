@@ -11,6 +11,100 @@ import PaymentSuccess from './PaymentSuccess';
 import TermsPage from './TermsPage';
 import DisclaimerPage from './DisclaimerPage';
 
+const SURVEY_URL = 'https://www.surveymonkey.com/r/YWPJ8PZ';
+
+// ─── Beta Survey Modal (shows once per session for trial users) ───────────────
+function BetaSurveyModal({ onClose }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+      zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <div style={{
+        background: '#1a1a1a', border: '1px solid #facc15', borderRadius: 16,
+        padding: '32px 28px', maxWidth: 420, width: '100%', textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>🦁</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#facc15', marginBottom: 8 }}>
+          Welcome to the LionBlade Beta!
+        </div>
+        <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 24, lineHeight: 1.6 }}>
+          You're one of a small group of traders helping shape this product.
+          Your honest feedback — good and bad — directly influences what gets built next.
+          <br /><br />
+          At the end of your 30 days, beta testers who submit feedback get locked in at the
+          <strong style={{ color: '#facc15' }}> Beta Founder rate: $99/yr</strong> (half the public price).
+        </div>
+        <a
+          href={SURVEY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={onClose}
+          style={{
+            display: 'block', background: '#facc15', color: '#0f0f0f',
+            fontWeight: 700, fontSize: 14, padding: '12px 0', borderRadius: 8,
+            textDecoration: 'none', marginBottom: 12,
+          }}
+        >
+          Take the 2-min Survey →
+        </a>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'none', border: 'none', color: '#64748b',
+            fontSize: 13, cursor: 'pointer', textDecoration: 'underline',
+          }}
+        >
+          I'll do it later
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Beta Survey Banner (dismissible, shown until user dismisses) ─────────────
+function BetaSurveyBanner({ onDismiss }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(90deg, #1a1200, #2a1f00)',
+      borderBottom: '1px solid #facc15',
+      padding: '10px 20px',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      gap: 12, flexWrap: 'wrap',
+    }}>
+      <div style={{ fontSize: 13, color: '#fde68a', display: 'flex', alignItems: 'center', gap: 8 }}>
+        🦁 <strong>You're in the LionBlade Beta</strong> — your feedback shapes the product.
+        Complete the survey to lock in the <strong>Beta Founder rate ($99/yr)</strong> after beta.
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <a
+          href={SURVEY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            background: '#facc15', color: '#0f0f0f', fontWeight: 700,
+            fontSize: 12, padding: '6px 14px', borderRadius: 6,
+            textDecoration: 'none', whiteSpace: 'nowrap',
+          }}
+        >
+          Take Survey →
+        </a>
+        <button
+          onClick={onDismiss}
+          style={{
+            background: 'none', border: 'none', color: '#64748b',
+            fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0,
+          }}
+          title="Dismiss"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function isExpired(expiresAt) {
   if (!expiresAt) return false; // no expiry = never expires
   if (expiresAt === 'expired') return true; // explicitly expired
@@ -24,6 +118,8 @@ export default function App() {
   const [showPricing, setShowPricing] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [showSurveyModal,  setShowSurveyModal]  = useState(false);
+  const [showSurveyBanner, setShowSurveyBanner] = useState(false);
 
   // Restore session from sessionStorage on mount
   useEffect(() => {
@@ -52,6 +148,13 @@ export default function App() {
     }
     setUser(userData);
     setShowPricing(false);
+    // Show beta survey modal for trial users (once per session)
+    if (userData.role === 'trial') {
+      const modalSeen = sessionStorage.getItem('beta_modal_seen');
+      const bannerDismissed = localStorage.getItem('beta_banner_dismissed');
+      if (!modalSeen) setShowSurveyModal(true);
+      if (!bannerDismissed) setShowSurveyBanner(true);
+    }
   }
 
   function handleLogout() {
@@ -59,6 +162,8 @@ export default function App() {
     setUser(null);
     setShowAdmin(false);
     setShowPricing(false);
+    setShowSurveyModal(false);
+    setShowSurveyBanner(false);
   }
 
   function handlePaymentSuccess() {
@@ -109,6 +214,12 @@ export default function App() {
 
   return (
     <>
+      {showSurveyBanner && user?.role === 'trial' && (
+        <BetaSurveyBanner onDismiss={() => {
+          setShowSurveyBanner(false);
+          localStorage.setItem('beta_banner_dismissed', '1');
+        }} />
+      )}
       <InsiderScanner
         user={user}
         onLogout={handleLogout}
@@ -118,6 +229,13 @@ export default function App() {
       />
       {showAdmin && (
         <AdminPanel onClose={() => setShowAdmin(false)} />
+      )}
+      {showSurveyModal && user?.role === 'trial' && (
+        <BetaSurveyModal onClose={() => {
+          setShowSurveyModal(false);
+          sessionStorage.setItem('beta_modal_seen', '1');
+          if (!localStorage.getItem('beta_banner_dismissed')) setShowSurveyBanner(true);
+        }} />
       )}
     </>
   );

@@ -1140,6 +1140,7 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
                 <SortTh col="industry">Industry</SortTh>
                 <SortTh col="insider">Insider</SortTh>
                 <SortTh col="role">Role</SortTh>
+                <SortTh col="transaction">Type</SortTh>
                 <SortTh col="amount">$ Amount</SortTh>
                 <SortTh col="shares">Shares</SortTh>
                 <SortTh col="price">Avg Price</SortTh>
@@ -1175,6 +1176,14 @@ export default function InsiderScanner({ user, onLogout, onAdmin, onTerms, onDis
                     <td style={{ padding:'9px 10px', whiteSpace:'nowrap' }}>{t.insider}</td>
                     <td style={{ padding:'9px 10px' }}>
                       <span style={{ fontSize:10, padding:'2px 7px', borderRadius:10, border:'0.5px solid #e5e7eb', color:'#6b7280', background:'#f9fafb' }}>{t.role}</span>
+                    </td>
+                    <td style={{ padding:'9px 10px' }}>
+                      <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:10,
+                        color: t.transaction==='Buy' ? '#065f46' : t.transaction==='Sell' ? '#dc2626' : '#6b7280',
+                        background: t.transaction==='Buy' ? '#d1fae5' : t.transaction==='Sell' ? '#fef2f2' : '#f3f4f6'
+                      }}>
+                        {t.transaction==='Buy' ? '▲ BUY' : t.transaction==='Sell' ? '▼ SELL' : t.transaction || '—'}
+                      </span>
                     </td>
                     <td style={{ padding:'9px 10px', fontWeight:500 }}>{fmt$(t.amount)}</td>
                     <td style={{ padding:'9px 10px', color:'#6b7280' }}>{(t.shares||0).toLocaleString()}</td>

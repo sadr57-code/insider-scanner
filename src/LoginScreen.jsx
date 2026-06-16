@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 
 export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
   const [mode,     setMode]   = useState('username'); // 'username' | 'code' | 'email' | 'signup'
+  const [isBeta,   setIsBeta] = useState(false);
   const [username, setUsername] = useState('');
   const [code,     setCode]   = useState('');
   const [email,    setEmail]  = useState('');
@@ -25,15 +26,20 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
   const [signupDone,    setSignupDone]    = useState(null); // { name, shareLink }
 
   // Auto-login from shareable link: ?user=xxx&pass=yyy
+  // Beta invite: ?beta=1 → auto-open signup with 45-day trial
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const u = params.get('user');
     const p = params.get('pass');
+    const beta = params.get('beta');
     if (u && p) {
       setMode('username');
       setUsername(u);
       setPass(p);
       setTimeout(() => doLoginWith({ username: u, password: p }), 100);
+    } else if (beta === '1') {
+      setIsBeta(true);
+      setMode('signup');
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -85,6 +91,7 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
           password: signupPass.trim(),
           name:     signupName.trim() || signupEmail.trim(),
           phone:    signupPhone.trim(),
+          beta:     isBeta,
         }),
       });
       const d = await r.json();

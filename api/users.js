@@ -245,7 +245,7 @@ export default async function handler(req, res) {
 
   // ── POST /api/users?action=signup — self-serve 14-day trial ────────────────────
   if (req.method === 'POST' && action === 'signup') {
-    const { password, name, email, phone } = body;
+    const { password, name, email, phone, beta } = body;
     if (!email?.trim())      return res.status(400).json({ ok: false, error: 'Email is required' });
     if (!password)           return res.status(400).json({ ok: false, error: 'Password is required' });
     if (password.length < 6) return res.status(400).json({ ok: false, error: 'Password must be at least 6 characters' });
@@ -263,9 +263,10 @@ export default async function handler(req, res) {
     );
     if (existing) return res.status(409).json({ ok: false, error: 'An account with this email already exists. Please sign in or contact support.' });
 
-    // Create trial user — 14 days, username = email
+    // Create trial user — 14 days (45 days for beta testers)
+    const trialDays = beta ? 45 : 14;
     const trialExpiry = new Date();
-    trialExpiry.setDate(trialExpiry.getDate() + 14);
+    trialExpiry.setDate(trialExpiry.getDate() + trialDays);
 
     const newUser = {
       id:         Date.now().toString(),
@@ -276,7 +277,7 @@ export default async function handler(req, res) {
       role:       'trial',
       password:   password,
       expiresAt:  trialExpiry.toISOString(),
-      notes:      'Self-serve trial signup',
+      notes:      beta ? 'Beta tester signup (45-day trial)' : 'Self-serve trial signup',
       active:     true,
       accessCode: generateAccessCode(),
       createdAt:  new Date().toISOString(),

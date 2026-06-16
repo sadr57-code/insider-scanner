@@ -15,7 +15,8 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
   const [error,    setError]  = useState('');
 
   // Signup-specific fields
-  const [signupUser,    setSignupUser]    = useState('');
+// REMOVE this line (line 18):
+ // const [signupUser,    setSignupUser]    = useState('');
   const [signupPass,    setSignupPass]    = useState('');
   const [signupName,    setSignupName]    = useState('');
   const [signupEmail,   setSignupEmail]   = useState('');

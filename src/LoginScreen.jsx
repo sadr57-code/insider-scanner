@@ -72,7 +72,7 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
   }
 
   async function doSignup() {
-    if (!signupUser.trim() || !signupPass.trim()) { setError('Username and password are required'); return; }
+    if (!signupEmail.trim() || !signupPass.trim()) { setError('Email and password are required'); return; }
     if (!signupAgreed) { setError('Please accept the Terms of Use and Disclaimer to continue'); return; }
     setLoading(true); setError('');
     try {
@@ -80,18 +80,18 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: signupUser.trim(),
+          email:    signupEmail.trim().toLowerCase(),
           password: signupPass.trim(),
-          name:     signupName.trim() || signupUser.trim(),
-          email:    signupEmail.trim(),
+          name:     signupName.trim() || signupEmail.trim(),
           phone:    signupPhone.trim(),
         }),
       });
       const d = await r.json();
       if (d.ok) {
         const base = window.location.origin + window.location.pathname;
-        const shareLink = `${base}?user=${encodeURIComponent(signupUser.trim())}&pass=${encodeURIComponent(signupPass.trim())}`;
-        setSignupDone({ name: d.name || signupName.trim() || signupUser.trim(), shareLink, expiresAt: d.expiresAt });
+        // Username = email, use email for auto-login link
+        const shareLink = `${base}?user=${encodeURIComponent(signupEmail.trim().toLowerCase())}&pass=${encodeURIComponent(signupPass.trim())}`;
+        setSignupDone({ name: d.name || signupName.trim() || signupEmail.trim(), shareLink, expiresAt: d.expiresAt });
       } else {
         setError(d.error || 'Signup failed');
       }
@@ -103,7 +103,8 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
   }
 
   function loginAfterSignup() {
-    doLoginWith({ username: signupUser.trim(), password: signupPass.trim() });
+    // username = email after new signup flow
+    doLoginWith({ username: signupEmail.trim().toLowerCase(), password: signupPass.trim() });
   }
 
   const inputStyle = {
@@ -142,7 +143,11 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
               {signupDone.shareLink}
             </div>
             <button
-              onClick={() => { navigator.clipboard.writeText(signupDone.shareLink); }}
+              onClick={() => {
+                navigator.clipboard.writeText(signupDone.shareLink)
+                  .then(() => alert('Link copied to clipboard!'))
+                  .catch(() => alert('Could not copy — please copy the link manually'));
+              }}
               style={{ fontSize:11, padding:'4px 12px', background:'#0ea5e9', color:'#fff', border:'none', borderRadius:6, cursor:'pointer', fontWeight:500 }}
             >📋 Copy Link</button>
           </div>
@@ -179,8 +184,12 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
 
           {/* Required fields */}
           <div style={{ marginBottom:12 }}>
-            <label style={labelStyle}>Username <span style={{ color:'#dc2626' }}>*</span></label>
-            <input style={inputStyle} value={signupUser} onChange={e => setSignupUser(e.target.value)} placeholder="Choose a username" autoFocus />
+            <label style={labelStyle}>Full Name</label>
+            <input style={inputStyle} value={signupName} onChange={e => setSignupName(e.target.value)} placeholder="Your name" autoFocus />
+          </div>
+          <div style={{ marginBottom:12 }}>
+            <label style={labelStyle}>Email <span style={{ color:'#dc2626' }}>*</span></label>
+            <input style={inputStyle} type="email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} placeholder="you@example.com" />
           </div>
           <div style={{ marginBottom:16 }}>
             <label style={labelStyle}>Password <span style={{ color:'#dc2626' }}>*</span></label>
@@ -195,17 +204,6 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
           </div>
 
           {/* Optional fields */}
-          <div style={{ marginBottom:12 }}>
-            <label style={labelStyle}>Full Name</label>
-            <input style={inputStyle} value={signupName} onChange={e => setSignupName(e.target.value)} placeholder="Your name" />
-          </div>
-          <div style={{ marginBottom:12 }}>
-            <label style={labelStyle}>
-              Email
-              <span style={{ fontSize:10, color:'#9ca3af', marginLeft:6, fontWeight:400 }}>for account recovery & product updates</span>
-            </label>
-            <input style={inputStyle} type="email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} placeholder="you@example.com" />
-          </div>
           <div style={{ marginBottom:18 }}>
             <label style={labelStyle}>Phone</label>
             <input style={inputStyle} type="tel" value={signupPhone} onChange={e => setSignupPhone(e.target.value)} placeholder="+1 (555) 000-0000" />

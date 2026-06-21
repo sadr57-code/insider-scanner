@@ -181,7 +181,7 @@ export default async function handler(req, res) {
 
   // ── Admin-only routes below ──────────────────────────────────────────────────
   const isAdmin = await isAdminSession(req);
-  if (!isAdmin && !['login', 'admin-login'].includes(action) && action !== 'filters') {
+  if (!isAdmin && !['login', 'admin-login', 'signup'].includes(action) && action !== 'filters') {
     return res.status(403).json({ ok: false, error: 'Admin access required' });
   }
 

@@ -11,7 +11,6 @@ import PaymentSuccess from './PaymentSuccess';
 import TermsPage from './TermsPage';
 import DisclaimerPage from './DisclaimerPage';
 import VerifyPage from './VerifyPage';
-import VerifyPage from './VerifyPage';
 
 const SURVEY_URL = 'https://www.surveymonkey.com/r/YWPJ8PZ';
 
@@ -188,7 +187,6 @@ export default function App() {
   // Email verification route
   if (window.location.pathname === '/verify') {
     const token = new URLSearchParams(window.location.search).get('token');
-    return <VerifyPage token={token} onVerified={() => { window.history.replaceState({}, '', '/'); }} />;
   }
 
   // Legal pages

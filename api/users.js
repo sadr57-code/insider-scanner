@@ -313,7 +313,11 @@ export default async function handler(req, res) {
       role:      newUser.role,
       uid:       newUser.id,
       expiresAt: newUser.expiresAt,
+      emailVerificationSent: true,
     });
+    const verifyToken = generateAccessCode() + generateAccessCode() + generateAccessCode();
+    await redisSet(\insider:verify:\, { userId: newUser.id, email: emailLower }, 86400);
+    await sendVerificationEmail(emailLower, newUser.name, verifyToken);
   }
 
   // ── POST /api/users?action=setExpiry — update expiry after payment ───────────

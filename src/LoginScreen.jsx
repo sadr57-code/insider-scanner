@@ -99,7 +99,7 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
         const base = window.location.origin + window.location.pathname;
         // Username = email, use email for auto-login link
         const shareLink = `${base}?user=${encodeURIComponent(signupEmail.trim().toLowerCase())}&pass=${encodeURIComponent(signupPass.trim())}`;
-        setSignupDone({ name: d.name || signupName.trim() || signupEmail.trim(), shareLink, expiresAt: d.expiresAt });
+        setSignupDone({ name: d.name || signupName.trim() || signupEmail.trim(), email: signupEmail.trim().toLowerCase(), expiresAt: d.expiresAt });
       } else {
         setError(d.error || 'Signup failed');
       }
@@ -129,48 +129,30 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
 
   // ── Signup success screen ──────────────────────────────────────────────────
   if (signupDone) {
-    const expiry = signupDone.expiresAt
-      ? new Date(signupDone.expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-      : '14 days';
     return (
       <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#f8fafc', fontFamily:'system-ui,-apple-system,sans-serif' }}>
         <div style={{ background:'#fff', borderRadius:16, padding:'40px 44px', width:400, boxShadow:'0 4px 24px rgba(0,0,0,.08)', border:'0.5px solid #e5e7eb', textAlign:'center' }}>
-          <div style={{ fontSize:40, marginBottom:12 }}>🎉</div>
-          <div style={{ fontSize:18, fontWeight:700, color:'#111827', marginBottom:6 }}>
-            Welcome, {signupDone.name}!
+          <div style={{ fontSize:48, marginBottom:12 }}>📧</div>
+          <div style={{ fontSize:18, fontWeight:700, color:'#111827', marginBottom:8 }}>
+            Check your email!
           </div>
           <div style={{ fontSize:13, color:'#6b7280', marginBottom:20, lineHeight:1.6 }}>
-            Your 14-day free trial is active until <strong>{expiry}</strong>.<br />
-            Save your login link to access anytime:
+            We sent a verification link to <strong>{signupDone.email}</strong>.<br />
+            Click the link in the email to activate your account.
           </div>
-
-          {/* Shareable link box */}
-          <div style={{ background:'#f0f9ff', border:'0.5px solid #bae6fd', borderRadius:10, padding:'12px 14px', marginBottom:20, textAlign:'left' }}>
-            <div style={{ fontSize:10, color:'#0369a1', fontWeight:600, marginBottom:6 }}>YOUR BOOKMARK LINK</div>
-            <div style={{ fontSize:11, color:'#0c4a6e', wordBreak:'break-all', fontFamily:'monospace', marginBottom:10, lineHeight:1.5 }}>
-              {signupDone.shareLink}
-            </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(signupDone.shareLink)
-                  .then(() => alert('Link copied to clipboard!'))
-                  .catch(() => alert('Could not copy — please copy the link manually'));
-              }}
-              style={{ fontSize:11, padding:'4px 12px', background:'#0ea5e9', color:'#fff', border:'none', borderRadius:6, cursor:'pointer', fontWeight:500 }}
-            >📋 Copy Link</button>
+          <div style={{ background:'#f0fdf4', border:'0.5px solid #86efac', borderRadius:10, padding:'12px 14px', marginBottom:20, fontSize:12, color:'#166534' }}>
+            ✅ Your 45-day Beta trial will start once verified
           </div>
-
-          <div style={{ fontSize:11, color:'#9ca3af', marginBottom:20, lineHeight:1.5 }}>
-            Bookmark this link — it logs you in automatically.<br/>
-            Keep your password safe and don't share it publicly.
+          <div style={{ fontSize:11, color:'#9ca3af', marginBottom:8, lineHeight:1.5 }}>
+            Didn't get it? Check your spam folder or contact<br/>
+            <a href="mailto:support@itasinc.net" style={{ color:'#1d4ed8' }}>support@itasinc.net</a>
           </div>
 
           <button
-            onClick={loginAfterSignup}
-            disabled={loading}
-            style={{ width:'100%', padding:'11px 0', background: loading ? '#93c5fd' : '#1d4ed8', color:'#fff', border:'none', borderRadius:9, fontSize:14, fontWeight:600, cursor:'pointer' }}
+            onClick={() => setSignupDone(null)}
+            style={{ width:'100%', padding:'11px 0', background:'#f3f4f6', color:'#374151', border:'none', borderRadius:9, fontSize:14, fontWeight:600, cursor:'pointer' }}
           >
-            {loading ? 'Logging in…' : 'Go to Scanner →'}
+            Back to Login
           </button>
         </div>
       </div>

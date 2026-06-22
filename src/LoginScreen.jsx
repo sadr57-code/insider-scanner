@@ -96,7 +96,6 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
       });
       const d = await r.json();
       if (d.ok) {
-        const shareLink = `${base}?user=${encodeURIComponent(signupEmail.trim().toLowerCase())}&pass=${encodeURIComponent(signupPass.trim())}`;
         setSignupDone({ name: d.name || signupName.trim() || signupEmail.trim(), email: signupEmail.trim().toLowerCase(), expiresAt: d.expiresAt });
       } else {
         setError(d.error || 'Signup failed');

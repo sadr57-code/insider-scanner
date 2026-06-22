@@ -10,6 +10,7 @@ import PricingPage from './PricingPage';
 import PaymentSuccess from './PaymentSuccess';
 import TermsPage from './TermsPage';
 import DisclaimerPage from './DisclaimerPage';
+import VerifyPage from './VerifyPage';
 
 const SURVEY_URL = 'https://www.surveymonkey.com/r/YWPJ8PZ';
 
@@ -179,6 +180,11 @@ export default function App() {
   }
 
   if (booting) return null;
+  // Email verification route
+  if (window.location.pathname === '/verify') {
+    const token = new URLSearchParams(window.location.search).get('token');
+    return <VerifyPage token={token} onVerified={() => { window.history.replaceState({}, '', '/'); }} />;
+  }
 
   // Legal pages
   if (showTerms) return <TermsPage onBack={() => setShowTerms(false)} />;

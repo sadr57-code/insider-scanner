@@ -186,7 +186,6 @@ export default function App() {
   }
   // Email verification route
   if (window.location.pathname === '/verify') {
-    const token = new URLSearchParams(window.location.search).get('token');
   }
 
   // Legal pages

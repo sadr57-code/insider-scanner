@@ -27,7 +27,24 @@ const OWNER_USER  = process.env.OWNER_USER      || 'admin';
 const OWNER_PASS  = process.env.OWNER_PASSWORD  || 'Owner2024!';
 const OWNER_EMAIL = process.env.OWNER_EMAIL     || 'owner@example.com';
 const USERS_KEY   = 'insider:users';
-const FILTERS_KEY = (uid) => `insider:filters:${uid}`;
+const FILTERS_KEY   = (uid) => `insider:filters:${uid}`;
+const RESEND_KEY    = process.env.RESEND_API_KEY;
+const APP_URL       = 'https://insider-scanner-tan.vercel.app';
+
+async function sendVerificationEmail(email, name, token) {
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'LionBlade Alerts <alerts@alerts.itasinc.net>',
+        to: email,
+        subject: 'Verify your LionBlade Insider Scanner email',
+        html: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0d1117;color:#e6edf3;border-radius:12px;"><div style="font-size:22px;font-weight:700;color:#f59e0b;margin-bottom:8px;">LionBlade Insider Scanner</div><p style="font-size:14px;line-height:1.6;">Hi ${name},</p><p style="font-size:14px;line-height:1.6;">Please verify your email to activate your account.</p><a href="${APP_URL}/verify?token=${token}" style="display:inline-block;margin:16px 0;padding:12px 28px;background:#f59e0b;color:#0d1117;font-weight:700;font-size:14px;border-radius:8px;text-decoration:none;">Verify Email Address</a><p style="font-size:12px;color:#6e7681;margin-top:24px;">Link expires in 24 hours. If you did not sign up, ignore this email.</p></div>`,
+      }),
+    });
+  } catch (e) { console.error('Resend error:', e.message); }
+}
 
 // ─── Redis helpers ────────────────────────────────────────────────────────────
 async function redisGet(key) {
@@ -142,6 +159,7 @@ export default async function handler(req, res) {
         u.active !== false
       );
       if (!user) return res.status(401).json({ ok: false, error: 'Invalid username or password' });
+      if (user.emailVerified === false) return res.status(401).json({ ok: false, error: 'Please verify your email before logging in. Check your inbox for the verification link.' });
       if (user.expiresAt && new Date(user.expiresAt) < new Date()) {
         return res.status(401).json({ ok: false, error: 'Account expired' });
       }
@@ -170,6 +188,7 @@ export default async function handler(req, res) {
         u.active !== false
       );
       if (!user) return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+      if (user.emailVerified === false) return res.status(401).json({ ok: false, error: 'Please verify your email before logging in. Check your inbox for the verification link.' });
       if (user.expiresAt && new Date(user.expiresAt) < new Date()) {
         return res.status(401).json({ ok: false, error: 'Account expired' });
       }
@@ -278,8 +297,9 @@ export default async function handler(req, res) {
       password:   password,
       expiresAt:  trialExpiry.toISOString(),
       notes:      beta ? 'Beta tester signup (45-day trial)' : 'Self-serve trial signup',
-      active:     true,
-      accessCode: generateAccessCode(),
+      active:         true,
+      emailVerified:  false,
+      accessCode:     generateAccessCode(),
       createdAt:  new Date().toISOString(),
       updatedAt:  new Date().toISOString(),
     };

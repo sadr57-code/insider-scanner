@@ -96,8 +96,6 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
       });
       const d = await r.json();
       if (d.ok) {
-        const base = window.location.origin + window.location.pathname;
-        // Username = email, use email for auto-login link
         const shareLink = `${base}?user=${encodeURIComponent(signupEmail.trim().toLowerCase())}&pass=${encodeURIComponent(signupPass.trim())}`;
         setSignupDone({ name: d.name || signupName.trim() || signupEmail.trim(), email: signupEmail.trim().toLowerCase(), expiresAt: d.expiresAt });
       } else {
@@ -108,11 +106,6 @@ export default function LoginScreen({ onLogin, onTerms, onDisclaimer }) {
     } finally {
       setLoading(false);
     }
-  }
-
-  function loginAfterSignup() {
-    // username = email after new signup flow
-    doLoginWith({ username: signupEmail.trim().toLowerCase(), password: signupPass.trim() });
   }
 
   const inputStyle = {

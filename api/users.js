@@ -307,17 +307,10 @@ export default async function handler(req, res) {
     users.push(newUser);
     await saveUsers(users);
 
-    return res.status(200).json({
-      ok: true,
-      name:      newUser.name,
-      role:      newUser.role,
-      uid:       newUser.id,
-      expiresAt: newUser.expiresAt,
-      emailVerificationSent: true,
-    });
     const verifyToken = generateAccessCode() + generateAccessCode() + generateAccessCode();
-    await redisSet(\insider:verify:\, { userId: newUser.id, email: emailLower }, 86400);
+    await redisSet(`insider:verify:${verifyToken}`, { userId: newUser.id, email: emailLower }, 86400);
     await sendVerificationEmail(emailLower, newUser.name, verifyToken);
+    return res.status(200).json({ ok: true, name: newUser.name, role: newUser.role, uid: newUser.id, expiresAt: newUser.expiresAt, emailVerificationSent: true });
   }
 
   // ── POST /api/users?action=setExpiry — update expiry after payment ───────────
